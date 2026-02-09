@@ -1,17 +1,19 @@
 {
-  "name": "@herzen/core",
-  "version": "0.0.1",
-  "type": "module",
-  "main": "dist/index.js",
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "dev": "node --watch --enable-source-maps dist/index.js",
-    "lint": "eslint .",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "clean": "rm -rf dist"
-  },
-  "dependencies": {
-    "@herzen/audio": "workspace:*"
-  },
-  "devDependencies": {}
+	"name": "@herzen/core",
+	"version": "0.0.1",
+	"type": "module",
+	"main": "dist/index.js",
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"dev": "tsx src/index.ts",
+		"dev:watch": "tsx watch src/index.ts",
+		"start": "node --enable-source-maps dist/index.js",
+		"lint": "eslint .",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"clean": "rm -rf dist"
+	},
+	"dependencies": {
+		"@herzen/audio": "workspace:*"
+	},
+	"devDependencies": {}
 }
