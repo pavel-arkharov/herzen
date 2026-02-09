@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.DS_Store
+
+# local-only artifacts
+data/
+**/models/
+*.wav
+*.mp3
+*.m4a

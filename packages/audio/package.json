@@ -1,0 +1,19 @@
+{
+	"name": "@herzen/audio",
+	"version": "0.0.1",
+	"type": "module",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": "./dist/index.js"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"dev": "node --enable-source-maps dist/index.js",
+		"lint": "eslint .",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"clean": "rm -rf dist"
+	},
+	"dependencies": {},
+	"devDependencies": {}
+}
