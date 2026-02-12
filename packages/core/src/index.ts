@@ -3,8 +3,9 @@ import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { speak } from "@herzen/tts";
+import { createRuntime } from "./runtime.js";
 import { createTriggerSource, resolveTriggerMode } from "./trigger/factory.js";
-import { isTriggerError, type TriggerMode, type TriggerSource } from "./trigger/types.js";
+import { isTriggerError } from "./trigger/types.js";
 
 const defaultDataRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "data");
 
@@ -16,37 +17,6 @@ function resolveDataRoot(rawDataDir = process.env.HERZEN_DATA_DIR): string {
 
 const outDir = join(resolveDataRoot(), "audio");
 mkdirSync(outDir, { recursive: true });
-
-let triggerSource: TriggerSource | null = null;
-let shuttingDown = false;
-
-async function shutdown(code = 0) {
-	if (shuttingDown) return;
-	shuttingDown = true;
-
-	try {
-		await triggerSource?.stop();
-	} catch (err) {
-		console.error("Trigger source cleanup error:", err);
-	}
-
-	process.exit(code);
-}
-
-process.on("SIGINT", () => {
-	console.log("\nShutting down…");
-	void shutdown(0);
-});
-
-process.on("SIGTERM", () => {
-	console.log("\nShutting down…");
-	void shutdown(0);
-});
-
-function listeningMessage(mode: TriggerMode): string {
-	if (mode === "stdin") return "\nListening… (press Enter to trigger)";
-	return `\nListening… (trigger mode: ${mode})`;
-}
 
 async function handleTrigger() {
 	const file = join(outDir, `test-${Date.now()}.wav`);
@@ -61,64 +31,25 @@ async function handleTrigger() {
 	console.log("Done:", file);
 }
 
-async function run() {
-	let triggerMode: TriggerMode;
-	try {
-		triggerMode = resolveTriggerMode();
-	} catch (err) {
-		console.error(err instanceof Error ? err.message : "Unknown trigger mode resolution error.");
-		await shutdown(1);
-		return;
-	}
+const runtime = createRuntime({
+	resolveTriggerMode,
+	createTriggerSource,
+	isTriggerError,
+	onTrigger: handleTrigger,
+	logger: console,
+	exit: (code) => {
+		process.exit(code);
+	},
+});
 
-	triggerSource = createTriggerSource(triggerMode);
+process.on("SIGINT", () => {
+	console.log("\nShutting down…");
+	void runtime.shutdown(0);
+});
 
-	try {
-		await triggerSource.start();
-	} catch (err) {
-		if (isTriggerError(err)) {
-			console.error(`Failed to start trigger source (${err.code}): ${err.message}`);
-		} else {
-			console.error("Failed to start trigger source:", err);
-		}
-		await shutdown(1);
-		return;
-	}
+process.on("SIGTERM", () => {
+	console.log("\nShutting down…");
+	void runtime.shutdown(0);
+});
 
-	console.log(`Trigger mode: ${triggerMode}`);
-	console.log(listeningMessage(triggerMode));
-
-	while (!shuttingDown) {
-		try {
-			await triggerSource.nextTrigger();
-			await handleTrigger();
-			console.log(listeningMessage(triggerMode));
-		} catch (err) {
-			if (shuttingDown) return;
-
-			if (isTriggerError(err)) {
-				if (err.code === "SOURCE_CLOSED") {
-					await shutdown(0);
-					return;
-				}
-
-				if (err.code === "NOT_IMPLEMENTED") {
-					console.error(err.message);
-					await shutdown(1);
-					return;
-				}
-
-				if (err.code === "SOURCE_FAILED") {
-					console.error(`Trigger source error: ${err.message}`);
-					await shutdown(1);
-					return;
-				}
-			}
-
-			console.error("Error:", err);
-			console.log(listeningMessage(triggerMode));
-		}
-	}
-}
-
-void run();
+void runtime.run();

@@ -1,5 +1,7 @@
 node_modules/
 dist/
+coverage/
+**/coverage/
 .env
 .DS_Store
 
@@ -11,3 +13,4 @@ data/
 *.m4a
 docs/audit/
 docs/skills/
+docs/tasks/

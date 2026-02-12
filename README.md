@@ -69,6 +69,20 @@ Active packages: `packages/core`, `packages/audio`, `packages/tts`.
 
 ---
 
+## Testing
+
+- Run all tests: `pnpm test`
+- Watch mode: `pnpm test:watch`
+- Coverage report: `pnpm test:coverage`
+- Run a single package test suite:
+  - `pnpm test:core`
+  - `pnpm test:audio`
+  - `pnpm test:tts`
+
+Current baseline is unit tests for trigger logic and command wrapper behavior.
+
+---
+
 ## Principles
 
 - **Local-first**: no cloud dependency by default

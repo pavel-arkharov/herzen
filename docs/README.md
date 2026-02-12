@@ -19,6 +19,10 @@ General documents live at the docs root. Topic-specific docs are grouped in subf
 
 - /Users/parkharo/Programming/herzen/docs/hardware/strategy.md
 
+## Tests
+
+- /Users/parkharo/Programming/herzen/docs/tests/testing_approach.md
+
 ## Audits (gitignored)
 
 - /Users/parkharo/Programming/herzen/docs/audit/
