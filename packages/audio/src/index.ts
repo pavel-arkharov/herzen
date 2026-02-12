@@ -19,6 +19,7 @@ export async function recordWav(
 ): Promise<void> {
 	// mono, 16kHz WAV, record N seconds
 	await run("rec", [
+		"-q",
 		"-c",
 		"1",
 		"-r",
@@ -31,10 +32,10 @@ export async function recordWav(
 }
 
 export async function playAudio(file: string): Promise<void> {
-	await run("play", [file]);
+	await run("play", ["-q", file]);
 }
 
 export async function beep(): Promise<void> {
 	// simple 200ms sine beep
-	await run("play", ["-n", "synth", "0.2", "sine", "880"]);
+	await run("play", ["-q", "-n", "synth", "0.2", "sine", "880"]);
 }

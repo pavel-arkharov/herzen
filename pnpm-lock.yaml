@@ -34,6 +34,11 @@ importers:
       '@herzen/audio':
         specifier: workspace:*
         version: link:../audio
+      '@herzen/tts':
+        specifier: workspace:*
+        version: link:../tts
+
+  packages/tts: {}
 
 packages:
 

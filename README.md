@@ -17,6 +17,17 @@ This repository is structured as a **pnpm monorepo**, with small, modular packag
 
 ---
 
+## Name
+
+The name has a four-part origin:
+
+- **Alexander Herzen**, a Russian thinker who is personally meaningful
+- the film **Her**, which seeded the project’s vision
+- **Zen**, as a shorthand for calm presence
+- the German sense of “**herzen**” as the feeling of a hug
+
+---
+
 ## Current status
 
 Early prototype stage.
@@ -26,8 +37,19 @@ At the moment, the system supports:
 - local audio recording
 - local audio playback
 - a minimal “assistant core” loop that coordinates actions
+- a trigger source boundary with `stdin` mode by default (`Enter` trigger)
+- selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin` and wakeword stub)
+- stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override
+- local text-to-speech via macOS `say`
 
-Wake word detection, speech-to-text, text-to-speech, and integrations will be added incrementally.
+Wake word detection, speech-to-text, and integrations will be added incrementally.
+
+---
+
+## System dependencies (current prototype)
+
+- SoX (`rec` and `play`) for audio capture and playback
+- macOS `say` for text-to-speech
 
 ---
 
@@ -36,13 +58,14 @@ Wake word detection, speech-to-text, text-to-speech, and integrations will be ad
 ```
 herzen/
 packages/
-core/ # assistant brain & orchestration
-audio/ # audio input/output utilities
+  core/ # assistant brain & orchestration
+  audio/ # audio input/output utilities
+  tts/ # text-to-speech utilities
 data/ # local-only runtime data (gitignored)
-docs/ # architecture & design notes
+docs/ # architecture, packages, and design notes
 ```
 
-Only `packages/core` and `packages/audio` are active right now.
+Active packages: `packages/core`, `packages/audio`, `packages/tts`.
 
 ---
 

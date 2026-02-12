@@ -13,7 +13,8 @@
 		"clean": "rm -rf dist"
 	},
 	"dependencies": {
-		"@herzen/audio": "workspace:*"
+		"@herzen/audio": "workspace:*",
+		"@herzen/tts": "workspace:*"
 	},
 	"devDependencies": {}
 }

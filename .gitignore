@@ -9,3 +9,5 @@ data/
 *.wav
 *.mp3
 *.m4a
+docs/audit/
+docs/skills/
