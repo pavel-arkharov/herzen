@@ -39,12 +39,12 @@ At the moment, the system supports:
 - a minimal “assistant core” loop that coordinates actions
 - initial local speech-to-text via `@herzen/stt` (whisper.cpp CLI wrapper)
 - a trigger source boundary with `stdin` mode by default (`Enter` trigger)
-- selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin` and wakeword stub)
-- a decided wakeword architecture: separate local daemon (`herzen-wake`) + local IPC contract (implementation in progress)
+- selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`)
+- wakeword sidecar integration via `@herzen/wakeword` (Unix socket JSONL client for `herzen-wake`)
 - stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override
 - local text-to-speech via macOS `say`
 
-Wakeword detection is being implemented incrementally via openWakeWord (local Python sidecar, no service key dependency).
+Wakeword detection runs via openWakeWord in a separate local daemon process (no service key dependency).
 
 ---
 
@@ -70,11 +70,7 @@ data/ # local-only runtime data (gitignored)
 docs/ # architecture, packages, and design notes
 ```
 
-Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`.
-
-Planned next package in this repo:
-
-- `packages/wakeword` (IPC client package for the external wakeword daemon)
+Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`, `packages/wakeword`.
 
 ---
 
@@ -88,6 +84,7 @@ Planned next package in this repo:
   - `pnpm test:audio`
   - `pnpm test:stt`
   - `pnpm test:tts`
+  - `pnpm test:wakeword`
 
 Current baseline is focused unit coverage for trigger handling, STT/core turn orchestration, and package command-wrapper behavior.
 

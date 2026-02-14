@@ -2,7 +2,7 @@ export type TriggerMode = "stdin" | "wakeword";
 
 export type TriggerKind = "manual" | "wakeword";
 
-export type TriggerErrorCode = "SOURCE_CLOSED" | "NOT_IMPLEMENTED" | "SOURCE_FAILED";
+export type TriggerErrorCode = "SOURCE_CLOSED" | "SOURCE_FAILED";
 
 export interface TriggerEvent {
 	kind: TriggerKind;

@@ -1,0 +1,18 @@
+{
+	"name": "@herzen/wakeword",
+	"version": "0.0.1",
+	"type": "module",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": "./dist/index.js"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"lint": "eslint . --format json",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"test": "vitest run tests",
+		"test:watch": "vitest tests",
+		"clean": "rm -rf dist"
+	}
+}

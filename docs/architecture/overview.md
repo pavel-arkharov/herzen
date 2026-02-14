@@ -39,12 +39,12 @@ Trigger detection is now isolated behind a `TriggerSource` interface in
 
 Current trigger source modes:
 - `stdin` (default): manual Enter key trigger
-- `wakeword`: adapter path reserved for sidecar integration
+- `wakeword`: sidecar-backed trigger via `@herzen/wakeword`
 
 The core orchestration loop consumes `TriggerSource` events and does not
 directly wire terminal input semantics.
 Trigger boundary failures are surfaced as typed trigger-domain errors
-(`SOURCE_CLOSED`, `SOURCE_FAILED`, `NOT_IMPLEMENTED`) rather than ad-hoc
+(`SOURCE_CLOSED`, `SOURCE_FAILED`) rather than ad-hoc
 errno-like custom codes.
 
 Wakeword implementation strategy is now fixed:
@@ -100,7 +100,7 @@ The system must remain usable even if the entire repository is copied to a new m
 
 ## Current packages
 
-Four packages are currently implemented: **audio**, **core**, **stt**, and **tts**.
+Five packages are currently implemented: **audio**, **core**, **stt**, **tts**, and **wakeword**.
 
 More will be added later without breaking these.
 

@@ -46,10 +46,15 @@ importers:
       '@herzen/tts':
         specifier: workspace:*
         version: link:../tts
+      '@herzen/wakeword':
+        specifier: workspace:*
+        version: link:../wakeword
 
   packages/stt: {}
 
   packages/tts: {}
+
+  packages/wakeword: {}
 
 packages:
 

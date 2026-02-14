@@ -6,10 +6,14 @@ import { fileURLToPath } from "node:url";
 import { format } from "node:util";
 import { speak } from "@herzen/tts";
 import { createLogger, toStructuredSttTurnEntry } from "./logging.js";
-import { createRuntime } from "./runtime.js";
+import { createRuntime, type RuntimeController } from "./runtime.js";
 import { createSttTriggerHandler, type SttLogEntry } from "./turn.js";
-import { createTriggerSource, resolveTriggerMode } from "./trigger/factory.js";
-import { isTriggerError } from "./trigger/types.js";
+import {
+	createTriggerSource,
+	resolveInitialTriggerModeInteractive,
+	shouldSwitchToStdinAfterWakewordFailure,
+} from "./trigger/factory.js";
+import { isTriggerError, type TriggerMode, type TriggerSource } from "./trigger/types.js";
 
 const defaultDataRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "data");
 
@@ -70,6 +74,13 @@ const runtimeLogger = {
 	},
 };
 
+let runtime: RuntimeController | null = null;
+
+async function flushAndExit(code: number): Promise<void> {
+	await Promise.all([coreLogger.drain(), triggerLogger.drain(), sttLogger.drain()]);
+	process.exit(code);
+}
+
 async function recordWithProgress(file: string, seconds: number): Promise<void> {
 	const startedAt = Date.now();
 	const barWidth = 26;
@@ -111,26 +122,111 @@ const handleTrigger = createSttTriggerHandler({
 	speak,
 });
 
-const runtime = createRuntime({
-	resolveTriggerMode,
-	createTriggerSource,
-	isTriggerError,
-	onTrigger: handleTrigger,
-	logger: runtimeLogger,
-	exit: async (code) => {
-		await Promise.all([coreLogger.drain(), triggerLogger.drain(), sttLogger.drain()]);
-		process.exit(code);
-	},
-});
+interface StartupTriggerRuntimeConfig {
+	triggerMode: TriggerMode;
+	createSource: (mode: TriggerMode) => TriggerSource;
+}
+
+async function resolveStartupTriggerRuntimeConfig(): Promise<StartupTriggerRuntimeConfig> {
+	const selectedMode = await resolveInitialTriggerModeInteractive();
+	if (selectedMode !== "wakeword") {
+		return {
+			triggerMode: selectedMode,
+			createSource: createTriggerSource,
+		};
+	}
+
+	const wakewordSource = createTriggerSource("wakeword");
+	try {
+		await wakewordSource.start();
+		return {
+			triggerMode: "wakeword",
+			createSource: (mode) => {
+				if (mode !== "wakeword") return createTriggerSource(mode);
+				return createPrestartedSource(wakewordSource);
+			},
+		};
+	} catch (err) {
+		if (isTriggerError(err) && (err.code === "SOURCE_FAILED" || err.code === "SOURCE_CLOSED")) {
+			process.stderr.write(`Wakeword unavailable: ${err.message}\n`);
+			const shouldSwitch = await shouldSwitchToStdinAfterWakewordFailure();
+			if (shouldSwitch) {
+				try {
+					await wakewordSource.stop();
+				} catch {
+					// Ignore cleanup failure and proceed with stdin fallback.
+				}
+				return {
+					triggerMode: "stdin",
+					createSource: createTriggerSource,
+				};
+			}
+		}
+		try {
+			await wakewordSource.stop();
+		} catch {
+			// Ignore cleanup failure on startup path.
+		}
+		throw err;
+	}
+}
+
+function createPrestartedSource(source: TriggerSource): TriggerSource {
+	let stopped = false;
+
+	return {
+		start() {
+			// Source was started during startup resolution.
+		},
+		nextTrigger() {
+			return source.nextTrigger();
+		},
+		async stop() {
+			if (stopped) return;
+			stopped = true;
+			await source.stop();
+		},
+	};
+}
+
+async function main(): Promise<void> {
+	let startupConfig: StartupTriggerRuntimeConfig;
+	try {
+		startupConfig = await resolveStartupTriggerRuntimeConfig();
+	} catch (err) {
+		runtimeLogger.error("Failed to resolve startup trigger mode:", err);
+		await flushAndExit(1);
+		return;
+	}
+
+	runtime = createRuntime({
+		resolveTriggerMode: () => startupConfig.triggerMode,
+		createTriggerSource: startupConfig.createSource,
+		isTriggerError,
+		onTrigger: handleTrigger,
+		logger: runtimeLogger,
+		exit: flushAndExit,
+	});
+
+	await runtime.run();
+}
 
 process.on("SIGINT", () => {
 	coreLogger.info("core.shutdown_requested", { message: "\nShutting down…", signal: "SIGINT" });
-	void runtime.shutdown(0);
+	if (runtime) {
+		void runtime.shutdown(0);
+		return;
+	}
+	void flushAndExit(0);
 });
 
 process.on("SIGTERM", () => {
 	coreLogger.info("core.shutdown_requested", { message: "\nShutting down…", signal: "SIGTERM" });
-	void runtime.shutdown(0);
+	if (runtime) {
+		void runtime.shutdown(0);
+		return;
+	}
+	void flushAndExit(0);
 });
 
-void runtime.run();
+void main();

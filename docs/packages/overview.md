@@ -2,8 +2,8 @@
 
 This document lists the current packages in the Herzen monorepo.
 
-**core**, **audio**, **stt**, and **tts** are currently implemented.
-Other packages (wake word, integrations) will be added later.
+**core**, **audio**, **stt**, **tts**, and **wakeword** are currently implemented.
+Other packages (integrations) will be added later.
 
 ---
 
@@ -62,8 +62,8 @@ Current behavior (prototype):
 - uses a trigger abstraction boundary (`core/src/trigger/*`)
 - defaults to `stdin` trigger mode (manual Enter key)
 - supports mode selection through `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`)
-- includes a `wakeword` trigger adapter path intended for sidecar client integration
-- uses typed trigger-domain errors for control flow (`SOURCE_CLOSED`, `SOURCE_FAILED`, `NOT_IMPLEMENTED`)
+- includes a `wakeword` trigger adapter backed by `@herzen/wakeword`
+- uses typed trigger-domain errors for control flow (`SOURCE_CLOSED`, `SOURCE_FAILED`)
 - keeps a runtime-lifecycle `stdin` error listener in the trigger source, including during pipeline handling
 - resolves default data output to repo-local `data/audio` independently of launch cwd
 - supports `HERZEN_DATA_DIR` override (writes to `HERZEN_DATA_DIR/audio`)
@@ -132,17 +132,40 @@ Future versions may:
 
 ---
 
+## @herzen/wakeword
+
+**Purpose**  
+Local IPC client for the external wakeword daemon (`herzen-wake`).
+
+This package is responsible for:
+
+- connecting to a local Unix socket wakeword daemon
+- waiting for daemon readiness before treating source as healthy
+- parsing JSONL wakeword protocol messages
+- delivering one detection per pending waiter (no queueing in v1)
+- normalizing daemon/protocol/socket failures into typed wakeword client errors
+
+Current environment surface:
+- `HERZEN_WAKEWORD_SOCKET` (optional socket path override)
+- `HERZEN_WAKEWORD_CONNECT_TIMEOUT_MS` (optional positive integer, default `3000`)
+- `HERZEN_DATA_DIR` (optional data-root override used in default socket path resolution)
+
+Current error model:
+- `CONFIG_INVALID`
+- `SOCKET_UNAVAILABLE`
+- `PROTOCOL_ERROR`
+- `SOURCE_CLOSED`
+- `SOURCE_FAILED`
+
+Shared protocol contract:
+- `docs/architecture/wakeword_sidecar_contract.md`
+
+---
+
 ## Planned (not yet implemented)
 
 Future packages may include:
 
-- wakeword (IPC client for external wakeword daemon)
 - integrations (home automation, notes, calendar)
 
 These are intentionally absent for now.
-
-Wakeword implementation direction:
-
-- separate daemon repo (`herzen-wake`) runs openWakeWord + microphone capture
-- this repo adds a focused wakeword client package and trigger adapter
-- shared protocol contract lives in `docs/architecture/wakeword_sidecar_contract.md`

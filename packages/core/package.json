@@ -17,7 +17,8 @@
 	"dependencies": {
 		"@herzen/audio": "workspace:*",
 		"@herzen/stt": "workspace:*",
-		"@herzen/tts": "workspace:*"
+		"@herzen/tts": "workspace:*",
+		"@herzen/wakeword": "workspace:*"
 	},
 	"devDependencies": {}
 }

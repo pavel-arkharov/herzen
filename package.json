@@ -15,6 +15,7 @@
 		"test:audio": "pnpm --filter @herzen/audio test",
 		"test:stt": "pnpm --filter @herzen/stt test",
 		"test:tts": "pnpm --filter @herzen/tts test",
+		"test:wakeword": "pnpm --filter @herzen/wakeword test",
 		"lint": "pnpm -r lint",
 		"typecheck": "pnpm -r typecheck",
 		"clean": "pnpm -r clean"

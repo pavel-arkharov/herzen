@@ -14,7 +14,7 @@ describe("TriggerError", () => {
 
 describe("isTriggerError", () => {
 	it("returns true for TriggerError instances", () => {
-		expect(isTriggerError(new TriggerError("NOT_IMPLEMENTED", "todo"))).toBe(true);
+		expect(isTriggerError(new TriggerError("SOURCE_CLOSED", "closed"))).toBe(true);
 	});
 
 	it("returns false for non-TriggerError values", () => {

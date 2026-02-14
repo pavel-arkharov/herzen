@@ -82,12 +82,6 @@ export function createRuntime(deps: RuntimeDependencies): RuntimeController {
 						return;
 					}
 
-					if (err.code === "NOT_IMPLEMENTED") {
-						deps.logger.error(err.message);
-						await shutdown(1);
-						return;
-					}
-
 					if (err.code === "SOURCE_FAILED") {
 						deps.logger.error(`Trigger source error: ${err.message}`);
 						await shutdown(1);

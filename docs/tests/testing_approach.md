@@ -10,6 +10,7 @@ Current test scope is unit tests for the monorepo packages:
 - `/Users/parkharo/Programming/herzen/packages/audio`
 - `/Users/parkharo/Programming/herzen/packages/stt`
 - `/Users/parkharo/Programming/herzen/packages/tts`
+- `/Users/parkharo/Programming/herzen/packages/wakeword`
 
 Primary goals:
 
@@ -32,6 +33,7 @@ Tests live in `tests/` folders inside each package:
 - `/Users/parkharo/Programming/herzen/packages/audio/tests`
 - `/Users/parkharo/Programming/herzen/packages/stt/tests`
 - `/Users/parkharo/Programming/herzen/packages/tts/tests`
+- `/Users/parkharo/Programming/herzen/packages/wakeword/tests`
 
 Naming convention:
 
@@ -62,6 +64,7 @@ pnpm test:core
 pnpm test:audio
 pnpm test:stt
 pnpm test:tts
+pnpm test:wakeword
 
 # quality gates used alongside tests
 pnpm lint
@@ -74,12 +77,14 @@ Optional package-local execution (from package directory):
 - `/Users/parkharo/Programming/herzen/packages/audio`: `pnpm test`
 - `/Users/parkharo/Programming/herzen/packages/stt`: `pnpm test`
 - `/Users/parkharo/Programming/herzen/packages/tts`: `pnpm test`
+- `/Users/parkharo/Programming/herzen/packages/wakeword`: `pnpm test`
 
 ## Test design guidance
 
 - Prefer unit tests with dependency injection and mocks over integration-style process tests.
 - Mock `node:child_process` for audio/TTS tests to avoid shelling out to `rec`, `play`, `say`.
 - For trigger-source tests, mock readline/stderr/stdin events and assert typed error codes.
+- For wakeword client tests, use socket test doubles and JSONL message fixtures (no real daemon process).
 - Keep tests behavior-focused:
   - success path
   - expected failure path
@@ -90,7 +95,7 @@ Optional package-local execution (from package directory):
 - Trigger mode resolution and source factory selection
 - Trigger error typing and guards
 - Stdin trigger source normal + terminal error paths
-- Runtime loop orchestration branches (`SOURCE_CLOSED`, `NOT_IMPLEMENTED`, `SOURCE_FAILED`)
+- Runtime loop orchestration branches (`SOURCE_CLOSED`, `SOURCE_FAILED`)
 - STT/core trigger-turn orchestration (`createSttTriggerHandler`) including:
   - transcript success path
   - empty-transcript fallback speech
@@ -99,6 +104,7 @@ Optional package-local execution (from package directory):
 - Audio command wrapper arguments and process error handling
 - STT binary/model/env validation + transcription parse and fallback paths
 - TTS language-tag/cyrillic inference branches and process error handling
+- Wakeword socket client lifecycle, protocol parsing, and error semantics
 
 ## Known gaps
 

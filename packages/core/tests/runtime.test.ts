@@ -83,29 +83,6 @@ describe("createRuntime", () => {
 		expect(exit).toHaveBeenCalledWith(0);
 	});
 
-	it("exits with failure on NOT_IMPLEMENTED trigger error", async () => {
-		const source = new SequenceTriggerSource([new TriggerError("NOT_IMPLEMENTED", "not ready")]);
-		const logger = {
-			log: vi.fn(),
-			error: vi.fn(),
-		};
-		const exit = vi.fn();
-
-		const runtime = createRuntime({
-			resolveTriggerMode: () => "wakeword",
-			createTriggerSource: () => source,
-			isTriggerError: (err): err is TriggerError => err instanceof TriggerError,
-			onTrigger: vi.fn(async () => {}),
-			logger,
-			exit,
-		});
-
-		await runtime.run();
-
-		expect(logger.error).toHaveBeenCalledWith("not ready");
-		expect(exit).toHaveBeenCalledWith(1);
-	});
-
 	it("exits with failure on SOURCE_FAILED trigger error", async () => {
 		const source = new SequenceTriggerSource([new TriggerError("SOURCE_FAILED", "read failure")]);
 		const logger = {
