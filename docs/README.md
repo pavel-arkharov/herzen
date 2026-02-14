@@ -24,6 +24,10 @@ General documents live at the docs root. Topic-specific docs are grouped in subf
 
 - /Users/parkharo/Programming/herzen/docs/tests/testing_approach.md
 
+## Process
+
+- /Users/parkharo/Programming/herzen/docs/process/task_execution_strategy.md
+
 ## Audits (gitignored)
 
 - /Users/parkharo/Programming/herzen/docs/audit/
@@ -35,3 +39,9 @@ Audit notes are local working artifacts and are intentionally not tracked.
 - /Users/parkharo/Programming/herzen/docs/skills/
 
 Skill prompts are local working artifacts and are intentionally not tracked.
+
+## Tasks (gitignored)
+
+- /Users/parkharo/Programming/herzen/docs/tasks/
+
+Task prompts and execution notes are local working artifacts and are intentionally not tracked.
