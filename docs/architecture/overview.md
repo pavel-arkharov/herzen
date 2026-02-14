@@ -39,13 +39,22 @@ Trigger detection is now isolated behind a `TriggerSource` interface in
 
 Current trigger source modes:
 - `stdin` (default): manual Enter key trigger
-- `wakeword`: placeholder adapter stub (`not implemented` for MVP)
+- `wakeword`: adapter path reserved for sidecar integration
 
 The core orchestration loop consumes `TriggerSource` events and does not
 directly wire terminal input semantics.
 Trigger boundary failures are surfaced as typed trigger-domain errors
 (`SOURCE_CLOSED`, `SOURCE_FAILED`, `NOT_IMPLEMENTED`) rather than ad-hoc
 errno-like custom codes.
+
+Wakeword implementation strategy is now fixed:
+- local persistent daemon in a separate repo (`herzen-wake`)
+- openWakeWord inference in daemon process (Python)
+- Unix socket JSONL protocol between daemon and `@herzen/core`
+- no service-account dependency for wakeword detection
+
+Shared contract for both repos:
+- [wakeword_sidecar_contract.md](./wakeword_sidecar_contract.md)
 
 When triggered, the core currently:
 - emits a short beep

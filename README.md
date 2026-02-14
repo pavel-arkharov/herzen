@@ -40,10 +40,11 @@ At the moment, the system supports:
 - initial local speech-to-text via `@herzen/stt` (whisper.cpp CLI wrapper)
 - a trigger source boundary with `stdin` mode by default (`Enter` trigger)
 - selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin` and wakeword stub)
+- a decided wakeword architecture: separate local daemon (`herzen-wake`) + local IPC contract (implementation in progress)
 - stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override
 - local text-to-speech via macOS `say`
 
-Wake word detection and integrations will be added incrementally.
+Wakeword detection is being implemented incrementally via openWakeWord (local Python sidecar, no service key dependency).
 
 ---
 
@@ -70,6 +71,10 @@ docs/ # architecture, packages, and design notes
 ```
 
 Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`.
+
+Planned next package in this repo:
+
+- `packages/wakeword` (IPC client package for the external wakeword daemon)
 
 ---
 

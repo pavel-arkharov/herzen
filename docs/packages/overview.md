@@ -62,7 +62,7 @@ Current behavior (prototype):
 - uses a trigger abstraction boundary (`core/src/trigger/*`)
 - defaults to `stdin` trigger mode (manual Enter key)
 - supports mode selection through `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`)
-- includes a `wakeword` trigger adapter stub marked as `not implemented` (MVP)
+- includes a `wakeword` trigger adapter path intended for sidecar client integration
 - uses typed trigger-domain errors for control flow (`SOURCE_CLOSED`, `SOURCE_FAILED`, `NOT_IMPLEMENTED`)
 - keeps a runtime-lifecycle `stdin` error listener in the trigger source, including during pipeline handling
 - resolves default data output to repo-local `data/audio` independently of launch cwd
@@ -136,7 +136,13 @@ Future versions may:
 
 Future packages may include:
 
-- wakeword (wake word detection)
+- wakeword (IPC client for external wakeword daemon)
 - integrations (home automation, notes, calendar)
 
 These are intentionally absent for now.
+
+Wakeword implementation direction:
+
+- separate daemon repo (`herzen-wake`) runs openWakeWord + microphone capture
+- this repo adds a focused wakeword client package and trigger adapter
+- shared protocol contract lives in `docs/architecture/wakeword_sidecar_contract.md`

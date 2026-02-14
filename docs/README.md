@@ -9,6 +9,7 @@ General documents live at the docs root. Topic-specific docs are grouped in subf
 ## Architecture
 
 - /Users/parkharo/Programming/herzen/docs/architecture/overview.md
+- /Users/parkharo/Programming/herzen/docs/architecture/wakeword_sidecar_contract.md
 
 ## Packages
 
