@@ -3,6 +3,7 @@ dist/
 coverage/
 **/coverage/
 .env
+.envrc
 .DS_Store
 
 # local-only artifacts

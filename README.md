@@ -37,12 +37,13 @@ At the moment, the system supports:
 - local audio recording
 - local audio playback
 - a minimal “assistant core” loop that coordinates actions
+- initial local speech-to-text via `@herzen/stt` (whisper.cpp CLI wrapper)
 - a trigger source boundary with `stdin` mode by default (`Enter` trigger)
 - selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin` and wakeword stub)
 - stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override
 - local text-to-speech via macOS `say`
 
-Wake word detection, speech-to-text, and integrations will be added incrementally.
+Wake word detection and integrations will be added incrementally.
 
 ---
 
@@ -50,6 +51,8 @@ Wake word detection, speech-to-text, and integrations will be added incrementall
 
 - SoX (`rec` and `play`) for audio capture and playback
 - macOS `say` for text-to-speech
+- whisper.cpp CLI (`whisper-cli` on PATH or `HERZEN_WHISPER_BIN`) for STT transcription
+- local whisper model file path via `HERZEN_WHISPER_MODEL` for STT transcription
 
 ---
 
@@ -60,12 +63,13 @@ herzen/
 packages/
   core/ # assistant brain & orchestration
   audio/ # audio input/output utilities
+  stt/ # speech-to-text utilities
   tts/ # text-to-speech utilities
 data/ # local-only runtime data (gitignored)
 docs/ # architecture, packages, and design notes
 ```
 
-Active packages: `packages/core`, `packages/audio`, `packages/tts`.
+Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`.
 
 ---
 
@@ -78,6 +82,7 @@ Active packages: `packages/core`, `packages/audio`, `packages/tts`.
   - `pnpm test:core`
   - `pnpm test:audio`
   - `pnpm test:tts`
+  - `pnpm --filter @herzen/stt test`
 
 Current baseline is unit tests for trigger logic and command wrapper behavior.
 

@@ -8,7 +8,7 @@
 		"dev": "tsx src/index.ts",
 		"dev:watch": "tsx watch src/index.ts",
 		"start": "node --enable-source-maps dist/index.js",
-		"lint": "eslint .",
+		"lint": "eslint . --format json",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"test": "vitest run tests",
 		"test:watch": "vitest tests",
@@ -16,6 +16,7 @@
 	},
 	"dependencies": {
 		"@herzen/audio": "workspace:*",
+		"@herzen/stt": "workspace:*",
 		"@herzen/tts": "workspace:*"
 	},
 	"devDependencies": {}

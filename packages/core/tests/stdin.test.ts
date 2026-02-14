@@ -104,6 +104,57 @@ describe("StdinTriggerSource", () => {
 		source.stop();
 	});
 
+	it("queues line events received before nextTrigger is awaited", async () => {
+		const source = new StdinTriggerSource();
+		source.start();
+
+		const rl = getLastInterface();
+		rl?.emit("line");
+
+		await expect(source.nextTrigger()).resolves.toMatchObject({
+			kind: "manual",
+			mode: "stdin",
+		});
+
+		source.stop();
+	});
+
+	it("drains queued events in FIFO order", async () => {
+		const source = new StdinTriggerSource();
+		source.start();
+
+		const rl = getLastInterface();
+		rl?.emit("line");
+		rl?.emit("line");
+		rl?.emit("line");
+
+		await expect(source.nextTrigger()).resolves.toMatchObject({ kind: "manual", mode: "stdin" });
+		await expect(source.nextTrigger()).resolves.toMatchObject({ kind: "manual", mode: "stdin" });
+		await expect(source.nextTrigger()).resolves.toMatchObject({ kind: "manual", mode: "stdin" });
+
+		source.stop();
+	});
+
+	it("caps queued events to avoid unbounded growth", async () => {
+		const source = new StdinTriggerSource();
+		source.start();
+
+		const rl = getLastInterface();
+		rl?.emit("line");
+		rl?.emit("line");
+		rl?.emit("line");
+		rl?.emit("line");
+		rl?.emit("line");
+
+		await expect(source.nextTrigger()).resolves.toMatchObject({ kind: "manual", mode: "stdin" });
+		await expect(source.nextTrigger()).resolves.toMatchObject({ kind: "manual", mode: "stdin" });
+		await expect(source.nextTrigger()).resolves.toMatchObject({ kind: "manual", mode: "stdin" });
+
+		const fourth = source.nextTrigger();
+		source.stop();
+		await expect(fourth).rejects.toMatchObject({ code: "SOURCE_CLOSED" });
+	});
+
 	it("rejects second nextTrigger while one call is pending", async () => {
 		const source = new StdinTriggerSource();
 		source.start();

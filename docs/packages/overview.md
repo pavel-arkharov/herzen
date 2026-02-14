@@ -2,8 +2,8 @@
 
 This document lists the current packages in the Herzen monorepo.
 
-**core**, **audio**, and **tts** are currently implemented.
-Other packages (wake word, speech-to-text, integrations) will be added later.
+**core**, **audio**, **stt**, and **tts** are currently implemented.
+Other packages (wake word, integrations) will be added later.
 
 ---
 
@@ -46,9 +46,9 @@ This package:
 
 - runs the main control loop
 - coordinates audio recording and playback
+- orchestrates STT via `@herzen/stt`
 - will eventually host:
   - wake word routing
-  - speech-to-text
   - intent resolution
   - tool calling
   - memory access
@@ -68,9 +68,38 @@ Current behavior (prototype):
 - resolves default data output to repo-local `data/audio` independently of launch cwd
 - supports `HERZEN_DATA_DIR` override (writes to `HERZEN_DATA_DIR/audio`)
 - emits a short beep
-- records ~5 seconds of audio to `data/audio`
-- plays the recording back
-- speaks a short confirmation via TTS
+- records audio to `data/audio` (default `3` seconds, configurable via `HERZEN_RECORD_SECONDS`)
+- runs local STT transcription and logs each STT event to `data/logs/stt.jsonl`
+- plays the recording only when `HERZEN_PLAYBACK=1`
+- speaks transcript-aware confirmation or a fallback message
+
+---
+
+## @herzen/stt
+
+**Purpose**  
+Local speech-to-text utilities.
+
+This package is responsible for:
+
+- converting local WAV files to text via whisper.cpp CLI
+- validating STT runtime/model configuration
+- normalizing transcription output and error typing for callers
+
+Current backend:
+- `whisper.cpp` CLI (`whisper-cli` fallback on `PATH`)
+
+Current environment surface:
+- `HERZEN_WHISPER_MODEL` (required model file path)
+- `HERZEN_WHISPER_BIN` (optional binary path override)
+- `HERZEN_STT_LANGUAGE` (`auto`, `en`, `ru`; optional default mode)
+- `HERZEN_STT_THREADS` (optional positive integer)
+
+Current error model:
+- `RUNTIME_MISSING`
+- `MODEL_MISSING`
+- `TRANSCRIBE_FAILED`
+- `OUTPUT_PARSE_FAILED`
 
 ---
 
@@ -103,7 +132,6 @@ Future versions may:
 Future packages may include:
 
 - wakeword (wake word detection)
-- stt (speech-to-text)
 - integrations (home automation, notes, calendar)
 
 These are intentionally absent for now.

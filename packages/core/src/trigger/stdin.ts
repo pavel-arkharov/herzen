@@ -2,11 +2,35 @@ import readline from "node:readline";
 import { TriggerError, type TriggerEvent, type TriggerSource } from "./types.js";
 
 export class StdinTriggerSource implements TriggerSource {
+	private static readonly MAX_PENDING_EVENTS = 3;
+
 	private rl: readline.Interface | null = null;
 	private started = false;
+	private queue: TriggerEvent[] = [];
 	private pendingReject: ((reason?: unknown) => void) | null = null;
-	private pendingLineHandler: (() => void) | null = null;
+	private pendingResolve: ((event: TriggerEvent) => void) | null = null;
 	private terminalError: TriggerError | null = null;
+
+	private readonly onLine = () => {
+		const event: TriggerEvent = {
+			kind: "manual",
+			mode: "stdin",
+			timestamp: Date.now(),
+		};
+
+		if (this.pendingResolve) {
+			const resolve = this.pendingResolve;
+			this.clearPending();
+			resolve(event);
+			return;
+		}
+
+		if (this.queue.length >= StdinTriggerSource.MAX_PENDING_EVENTS) {
+			return;
+		}
+
+		this.queue.push(event);
+	};
 
 	private readonly onStdinError = (err: NodeJS.ErrnoException | null) => {
 		if (err?.code === "EIO") {
@@ -29,10 +53,13 @@ export class StdinTriggerSource implements TriggerSource {
 		if (this.started) return;
 
 		this.terminalError = null;
+		this.queue = [];
+		this.clearPending();
 		this.rl = readline.createInterface({
 			input: process.stdin,
 			output: process.stdout,
 		});
+		this.rl.on("line", this.onLine);
 		this.rl.on("close", this.onInterfaceClose);
 		process.stdin.on("error", this.onStdinError);
 		this.started = true;
@@ -43,7 +70,7 @@ export class StdinTriggerSource implements TriggerSource {
 			throw new TriggerError("SOURCE_FAILED", "Stdin trigger source is not started.");
 		}
 
-		if (this.pendingReject) {
+		if (this.pendingResolve || this.pendingReject) {
 			throw new TriggerError("SOURCE_FAILED", "Stdin trigger source is already awaiting a trigger.");
 		}
 
@@ -51,25 +78,12 @@ export class StdinTriggerSource implements TriggerSource {
 			throw this.terminalError;
 		}
 
+		const queued = this.queue.shift();
+		if (queued) return queued;
+
 		return new Promise<TriggerEvent>((resolve, reject) => {
-			const rl = this.rl;
-			if (!rl) {
-				reject(new TriggerError("SOURCE_FAILED", "Stdin trigger source is unavailable."));
-				return;
-			}
-
-			const onLine = () => {
-				this.clearPending();
-				resolve({
-					kind: "manual",
-					mode: "stdin",
-					timestamp: Date.now(),
-				});
-			};
-
+			this.pendingResolve = resolve;
 			this.pendingReject = reject;
-			this.pendingLineHandler = onLine;
-			rl.once("line", onLine);
 		});
 	}
 
@@ -79,8 +93,10 @@ export class StdinTriggerSource implements TriggerSource {
 		this.started = false;
 		const rl = this.rl;
 		this.rl = null;
+		this.queue = [];
 		process.stdin.off("error", this.onStdinError);
 		if (rl) {
+			rl.off("line", this.onLine);
 			rl.off("close", this.onInterfaceClose);
 		}
 		this.rejectPending(new TriggerError("SOURCE_CLOSED", "Stdin trigger source stopped."));
@@ -101,10 +117,7 @@ export class StdinTriggerSource implements TriggerSource {
 	}
 
 	private clearPending() {
-		if (this.rl && this.pendingLineHandler) {
-			this.rl.off("line", this.pendingLineHandler);
-		}
-		this.pendingLineHandler = null;
+		this.pendingResolve = null;
 		this.pendingReject = null;
 	}
 }

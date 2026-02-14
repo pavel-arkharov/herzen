@@ -6,7 +6,7 @@
 		"build": "pnpm -r build",
 		"build:core": "pnpm --filter @herzen/core... build",
 		"build:audio": "pnpm --filter @herzen/audio build",
-		"dev": "pnpm -C packages/core dev:watch",
+		"dev": "pnpm -C packages/core dev",
 		"start": "pnpm build:core && pnpm --filter @herzen/core start",
 		"test": "vitest run",
 		"test:watch": "vitest",

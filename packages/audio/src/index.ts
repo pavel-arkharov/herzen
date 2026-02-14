@@ -17,17 +17,18 @@ export async function recordWav(
 	seconds: number,
 	sampleRate = 16000,
 ): Promise<void> {
-	// mono, 16kHz WAV, record N seconds
+	// Record with device defaults, then resample deterministically for STT.
 	await run("rec", [
 		"-q",
 		"-c",
 		"1",
-		"-r",
-		String(sampleRate),
 		outFile,
 		"trim",
 		"0",
 		String(seconds),
+		"rate",
+		"-v",
+		String(sampleRate),
 	]);
 }
 

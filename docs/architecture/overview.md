@@ -49,9 +49,11 @@ errno-like custom codes.
 
 When triggered, the core currently:
 - emits a short beep
-- records ~5 seconds of audio into `data/audio`
-- plays the recorded file back
-- speaks a brief confirmation via TTS
+- records audio into `data/audio` (default `3` seconds, configurable via `HERZEN_RECORD_SECONDS`)
+- runs local STT via `@herzen/stt` (`transcribeWav`)
+- appends one structured STT event per trigger to `data/logs/stt.jsonl`
+- optionally plays the recorded file when `HERZEN_PLAYBACK=1`
+- speaks transcript-aware confirmation when transcription succeeds, else a short fallback
 
 Audio output path resolution is stable across launch directories:
 - default data root resolves to repository `data/` from module location
@@ -89,7 +91,7 @@ The system must remain usable even if the entire repository is copied to a new m
 
 ## Current packages
 
-Three packages are currently implemented: **audio**, **core**, and **tts**.
+Four packages are currently implemented: **audio**, **core**, **stt**, and **tts**.
 
 More will be added later without breaking these.
 

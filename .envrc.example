@@ -1,0 +1,5 @@
+export HERZEN_WHISPER_BIN="/opt/homebrew/bin/whisper-cli"
+export HERZEN_WHISPER_MODEL="$PWD/data/models/ggml-base.bin"
+export HERZEN_STT_LANGUAGE="auto"
+export HERZEN_RECORD_SECONDS="3"
+export HERZEN_PLAYBACK="0"

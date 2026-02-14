@@ -45,7 +45,7 @@ describe("audio command wrappers", () => {
 		await expect(pending).resolves.toBeUndefined();
 		expect(spawnMock).toHaveBeenCalledWith(
 			"rec",
-			["-q", "-c", "1", "-r", "16000", "/tmp/demo.wav", "trim", "0", "5"],
+			["-q", "-c", "1", "/tmp/demo.wav", "trim", "0", "5", "rate", "-v", "16000"],
 			{ stdio: "inherit" },
 		);
 	});

@@ -8,12 +8,14 @@ Current test scope is unit tests for the monorepo packages:
 
 - `/Users/parkharo/Programming/herzen/packages/core`
 - `/Users/parkharo/Programming/herzen/packages/audio`
+- `/Users/parkharo/Programming/herzen/packages/stt`
 - `/Users/parkharo/Programming/herzen/packages/tts`
 
 Primary goals:
 
 - catch regressions in trigger logic and runtime orchestration
 - validate command-wrapper behavior for audio and TTS modules
+- keep STT test execution wired while package-local STT tests are being added
 - keep tests fast and deterministic (no real audio hardware needed)
 
 ## Tooling
@@ -28,6 +30,7 @@ Tests live in `tests/` folders inside each package:
 
 - `/Users/parkharo/Programming/herzen/packages/core/tests`
 - `/Users/parkharo/Programming/herzen/packages/audio/tests`
+- `/Users/parkharo/Programming/herzen/packages/stt/tests` (currently not present)
 - `/Users/parkharo/Programming/herzen/packages/tts/tests`
 
 Naming convention:
@@ -58,6 +61,7 @@ pnpm test:coverage
 pnpm test:core
 pnpm test:audio
 pnpm test:tts
+pnpm --filter @herzen/stt test
 
 # quality gates used alongside tests
 pnpm lint
@@ -68,6 +72,7 @@ Optional package-local execution (from package directory):
 
 - `/Users/parkharo/Programming/herzen/packages/core`: `pnpm test`
 - `/Users/parkharo/Programming/herzen/packages/audio`: `pnpm test`
+- `/Users/parkharo/Programming/herzen/packages/stt`: `pnpm test` (`--passWithNoTests` currently)
 - `/Users/parkharo/Programming/herzen/packages/tts`: `pnpm test`
 
 ## Test design guidance
@@ -89,6 +94,11 @@ Optional package-local execution (from package directory):
 - Audio command wrapper arguments and process error handling
 - TTS language-tag/cyrillic inference branches and process error handling
 
+## Known gaps
+
+- `@herzen/stt` has no package-local unit tests yet.
+- Current core runtime tests do not exercise the STT transcription path.
+
 ## Adding new tests
 
 When adding features:
@@ -105,3 +115,4 @@ When adding features:
 
 - Coverage output is generated in `coverage/` (gitignored).
 - Keep tests independent from local data artifacts in `/data`.
+- `@herzen/stt` currently has no package-local test files; its `test` script passes when no tests are present.
