@@ -13,6 +13,7 @@
 		"test:coverage": "vitest run --coverage",
 		"test:core": "pnpm --filter @herzen/core test",
 		"test:audio": "pnpm --filter @herzen/audio test",
+		"test:stt": "pnpm --filter @herzen/stt test",
 		"test:tts": "pnpm --filter @herzen/tts test",
 		"lint": "pnpm -r lint",
 		"typecheck": "pnpm -r typecheck",
