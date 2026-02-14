@@ -1,10 +1,11 @@
 import { recordWav, playAudio, beep } from "@herzen/audio";
 import { transcribeWav, SttError } from "@herzen/stt";
 import { mkdirSync } from "node:fs";
-import { appendFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { format } from "node:util";
 import { speak } from "@herzen/tts";
+import { createLogger, toStructuredSttTurnEntry } from "./logging.js";
 import { createRuntime } from "./runtime.js";
 import { createSttTriggerHandler, type SttLogEntry } from "./turn.js";
 import { createTriggerSource, resolveTriggerMode } from "./trigger/factory.js";
@@ -21,13 +22,53 @@ function resolveDataRoot(rawDataDir = process.env.HERZEN_DATA_DIR): string {
 const dataRoot = resolveDataRoot();
 const outDir = join(dataRoot, "audio");
 const logsDir = join(dataRoot, "logs");
-const sttLogFile = join(logsDir, "stt.jsonl");
 mkdirSync(outDir, { recursive: true });
-mkdirSync(logsDir, { recursive: true });
+
+const coreLogger = createLogger({
+	logsDir,
+	component: "core",
+});
+
+const triggerLogger = createLogger({
+	logsDir,
+	component: "trigger",
+});
+
+const sttLogger = createLogger({
+	logsDir,
+	component: "stt",
+});
+
+function asMessage(args: unknown[]): string {
+	return format(...args);
+}
 
 async function appendSttLog(entry: SttLogEntry): Promise<void> {
-	await appendFile(sttLogFile, `${JSON.stringify(entry)}\n`, "utf8");
+	await sttLogger.appendJsonl(
+		"stt",
+		toStructuredSttTurnEntry(entry, {
+			transcriptEnabled: sttLogger.transcriptEnabled,
+		}),
+	);
 }
+
+const sttTurnLogger = {
+	log: (...args: unknown[]) => {
+		sttLogger.info("stt.status", { message: asMessage(args) });
+	},
+	error: (...args: unknown[]) => {
+		sttLogger.error("stt.error", { message: asMessage(args) });
+	},
+};
+
+const runtimeLogger = {
+	log: (...args: unknown[]) => {
+		triggerLogger.info("trigger.status", { message: asMessage(args) });
+	},
+	error: (...args: unknown[]) => {
+		triggerLogger.error("trigger.error", { message: asMessage(args) });
+	},
+};
 
 async function recordWithProgress(file: string, seconds: number): Promise<void> {
 	const startedAt = Date.now();
@@ -58,7 +99,7 @@ const handleTrigger = createSttTriggerHandler({
 	getEnv: () => process.env,
 	now: () => Date.now(),
 	nowIso: () => new Date().toISOString(),
-	logger: console,
+	logger: sttTurnLogger,
 	recordAudio: async (file, seconds) => {
 		await beep();
 		await recordWithProgress(file, seconds);
@@ -75,19 +116,20 @@ const runtime = createRuntime({
 	createTriggerSource,
 	isTriggerError,
 	onTrigger: handleTrigger,
-	logger: console,
-	exit: (code) => {
+	logger: runtimeLogger,
+	exit: async (code) => {
+		await Promise.all([coreLogger.drain(), triggerLogger.drain(), sttLogger.drain()]);
 		process.exit(code);
 	},
 });
 
 process.on("SIGINT", () => {
-	console.log("\nShutting down…");
+	coreLogger.info("core.shutdown_requested", { message: "\nShutting down…", signal: "SIGINT" });
 	void runtime.shutdown(0);
 });
 
 process.on("SIGTERM", () => {
-	console.log("\nShutting down…");
+	coreLogger.info("core.shutdown_requested", { message: "\nShutting down…", signal: "SIGTERM" });
 	void runtime.shutdown(0);
 });
 

@@ -11,7 +11,7 @@ export interface RuntimeDependencies {
 	isTriggerError: (err: unknown) => err is TriggerError;
 	onTrigger: () => Promise<void>;
 	logger: RuntimeLogger;
-	exit: (code: number) => void;
+	exit: (code: number) => void | Promise<void>;
 }
 
 export interface RuntimeController {
@@ -38,7 +38,7 @@ export function createRuntime(deps: RuntimeDependencies): RuntimeController {
 			deps.logger.error("Trigger source cleanup error:", err);
 		}
 
-		deps.exit(code);
+		await Promise.resolve(deps.exit(code));
 	};
 
 	const run = async (): Promise<void> => {

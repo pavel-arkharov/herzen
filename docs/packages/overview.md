@@ -67,9 +67,14 @@ Current behavior (prototype):
 - keeps a runtime-lifecycle `stdin` error listener in the trigger source, including during pipeline handling
 - resolves default data output to repo-local `data/audio` independently of launch cwd
 - supports `HERZEN_DATA_DIR` override (writes to `HERZEN_DATA_DIR/audio`)
+- writes runtime structured logs to `data/logs/runtime.jsonl`
+- writes STT turn logs to `data/logs/stt.jsonl`
+- supports log level control through `HERZEN_LOG_LEVEL` (`info`, `warn`, `error`; default `info`)
+- gates transcript persistence in logs with `HERZEN_LOG_TRANSCRIPT` (default disabled)
+- sanitizes JSONL stream names and degrades logging sink failures to console warnings
 - emits a short beep
 - records audio to `data/audio` (default `3` seconds, configurable via `HERZEN_RECORD_SECONDS`)
-- runs local STT transcription and logs each STT event to `data/logs/stt.jsonl`
+- runs local STT transcription and logs per-turn telemetry (latency, duration, language mode, detected language, optional error code)
 - plays the recording only when `HERZEN_PLAYBACK=1`
 - speaks transcript-aware confirmation or a fallback message
 
