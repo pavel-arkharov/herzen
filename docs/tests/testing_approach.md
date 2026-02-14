@@ -91,13 +91,18 @@ Optional package-local execution (from package directory):
 - Trigger error typing and guards
 - Stdin trigger source normal + terminal error paths
 - Runtime loop orchestration branches (`SOURCE_CLOSED`, `NOT_IMPLEMENTED`, `SOURCE_FAILED`)
+- STT/core trigger-turn orchestration (`createSttTriggerHandler`) including:
+  - transcript success path
+  - empty-transcript fallback speech
+  - typed and unknown STT failure handling
+  - STT log entry shape and playback toggle behavior
 - Audio command wrapper arguments and process error handling
 - STT binary/model/env validation + transcription parse and fallback paths
 - TTS language-tag/cyrillic inference branches and process error handling
 
 ## Known gaps
 
-- Current core runtime tests do not exercise the STT transcription path.
+- No end-to-end test currently executes the full core runtime loop against real local tools (`rec`, `play`, `say`, `whisper.cpp`).
 
 ## Adding new tests
 

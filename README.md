@@ -81,10 +81,10 @@ Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tt
 - Run a single package test suite:
   - `pnpm test:core`
   - `pnpm test:audio`
+  - `pnpm test:stt`
   - `pnpm test:tts`
-  - `pnpm --filter @herzen/stt test`
 
-Current baseline is unit tests for trigger logic and command wrapper behavior.
+Current baseline is focused unit coverage for trigger handling, STT/core turn orchestration, and package command-wrapper behavior.
 
 ---
 
