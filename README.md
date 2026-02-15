@@ -41,6 +41,9 @@ At the moment, the system supports:
 - a trigger source boundary with `stdin` mode by default (`Enter` trigger)
 - selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`)
 - wakeword sidecar integration via `@herzen/wakeword` (Unix socket JSONL client for `herzen-wake`)
+- dual recording modes via `HERZEN_RECORD_MODE`:
+  - `fixed` (default): fixed `HERZEN_RECORD_SECONDS`
+  - `adaptive`: stop on trailing silence with max/min/timeout guardrails
 - stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override
 - local text-to-speech via macOS `say`
 

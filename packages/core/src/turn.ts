@@ -1,6 +1,12 @@
 import { join } from "node:path";
+import type { AdaptiveRecordOptions } from "@herzen/audio";
+import {
+	formatRecordStartLabel,
+	resolveRecordPlan,
+	SAFE_FALLBACK_RECORD_SECONDS,
+	type AdaptiveRecordPlan,
+} from "./recording.js";
 
-const DEFAULT_RECORD_SECONDS = 3;
 const FALLBACK_SPEECH = "[en] I couldn't understand that.";
 
 export interface SttLogEntry {
@@ -36,7 +42,9 @@ export interface TriggerTurnDependencies {
 	now: () => number;
 	nowIso: () => string;
 	logger: TurnLogger;
-	recordAudio: (file: string, seconds: number) => Promise<void>;
+	beep: () => Promise<void>;
+	recordFixedAudio: (file: string, seconds: number) => Promise<void>;
+	recordAdaptiveAudio: (file: string, options: AdaptiveRecordOptions) => Promise<void>;
 	transcribeWav: (file: string) => Promise<SttResultLike>;
 	isSttError: (err: unknown) => err is SttErrorLike;
 	appendSttLog: (entry: SttLogEntry) => Promise<void>;
@@ -49,11 +57,19 @@ export function createSttTriggerHandler(deps: TriggerTurnDependencies): () => Pr
 		const env = deps.getEnv();
 		const file = join(deps.outDir, `test-${deps.now()}.wav`);
 		const languageMode = resolveSttLanguageMode(env.HERZEN_STT_LANGUAGE);
-		const recordSeconds = resolveRecordSeconds(env.HERZEN_RECORD_SECONDS, deps.logger);
+		const recordPlan = resolveRecordPlan(env, {
+			warn: (message) => deps.logger.error(message),
+		});
 		const playbackEnabled = resolvePlaybackEnabled(env.HERZEN_PLAYBACK);
 
-		deps.logger.log(`Triggered. Recording ${recordSeconds.toFixed(1)} seconds…`);
-		await deps.recordAudio(file, recordSeconds);
+		deps.logger.log(`Triggered. ${formatRecordStartLabel(recordPlan)}`);
+		await deps.beep();
+
+		if (recordPlan.mode === "fixed") {
+			await deps.recordFixedAudio(file, recordPlan.seconds);
+		} else {
+			await recordAdaptiveWithFallback(file, recordPlan, deps);
+		}
 
 		let latencyMs: number;
 		let durationMs: number;
@@ -123,23 +139,32 @@ function resolveSttLanguageMode(rawLanguage: string | undefined): string {
 	return fromEnv || "auto";
 }
 
-function resolveRecordSeconds(rawSeconds: string | undefined, logger: TurnLogger): number {
-	const trimmed = rawSeconds?.trim();
-	if (!trimmed) return DEFAULT_RECORD_SECONDS;
-	const parsed = Number.parseFloat(trimmed);
-	if (!Number.isFinite(parsed) || parsed <= 0) {
-		logger.error(
-			`Invalid HERZEN_RECORD_SECONDS "${rawSeconds}". Falling back to ${DEFAULT_RECORD_SECONDS} seconds.`,
-		);
-		return DEFAULT_RECORD_SECONDS;
-	}
-	return Math.min(parsed, 30);
-}
-
 function resolvePlaybackEnabled(rawPlayback: string | undefined): boolean {
 	const normalized = rawPlayback?.trim().toLowerCase();
 	if (!normalized) return false;
 	return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
+async function recordAdaptiveWithFallback(
+	file: string,
+	plan: AdaptiveRecordPlan,
+	deps: TriggerTurnDependencies,
+): Promise<void> {
+	try {
+		await deps.recordAdaptiveAudio(file, {
+			maxSeconds: plan.maxSeconds,
+			minSeconds: plan.minSeconds,
+			silenceSeconds: plan.silenceSeconds,
+			silenceThresholdPercent: plan.silenceThresholdPercent,
+			noSpeechTimeoutSeconds: plan.noSpeechTimeoutSeconds,
+		});
+	} catch (err) {
+		const reason = err instanceof Error ? err.message : String(err);
+		deps.logger.error(
+			`Adaptive recording failed (${reason}). Falling back to fixed ${SAFE_FALLBACK_RECORD_SECONDS.toFixed(1)} seconds.`,
+		);
+		await deps.recordFixedAudio(file, plan.fallbackSeconds);
+	}
 }
 
 function hasCyrillic(text: string): boolean {

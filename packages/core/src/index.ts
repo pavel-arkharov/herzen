@@ -1,4 +1,4 @@
-import { recordWav, playAudio, beep } from "@herzen/audio";
+import { recordWav, recordWavAdaptive, playAudio, beep, type AdaptiveRecordOptions } from "@herzen/audio";
 import { transcribeWav, SttError } from "@herzen/stt";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -105,16 +105,41 @@ async function recordWithProgress(file: string, seconds: number): Promise<void> 
 	}
 }
 
+async function recordAdaptiveWithProgress(file: string, options: AdaptiveRecordOptions): Promise<void> {
+	const startedAt = Date.now();
+	const spinner = ["|", "/", "-", "\\"];
+	let idx = 0;
+
+	const render = (forceDone = false) => {
+		const elapsedSeconds = Math.min((Date.now() - startedAt) / 1000, options.maxSeconds);
+		const frame = forceDone ? " " : spinner[idx % spinner.length];
+		idx += 1;
+		process.stdout.write(
+			`\rRecording ${frame} ${elapsedSeconds.toFixed(1)}s (max ${options.maxSeconds.toFixed(1)}s)`,
+		);
+		if (forceDone) process.stdout.write("\n");
+	};
+
+	render(false);
+	const ticker = setInterval(() => render(false), 120);
+
+	try {
+		await recordWavAdaptive(file, options);
+	} finally {
+		clearInterval(ticker);
+		render(true);
+	}
+}
+
 const handleTrigger = createSttTriggerHandler({
 	outDir,
 	getEnv: () => process.env,
 	now: () => Date.now(),
 	nowIso: () => new Date().toISOString(),
 	logger: sttTurnLogger,
-	recordAudio: async (file, seconds) => {
-		await beep();
-		await recordWithProgress(file, seconds);
-	},
+	beep,
+	recordFixedAudio: recordWithProgress,
+	recordAdaptiveAudio: recordAdaptiveWithProgress,
 	transcribeWav,
 	isSttError: (err): err is SttError => err instanceof SttError,
 	appendSttLog,

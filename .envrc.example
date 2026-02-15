@@ -1,5 +1,18 @@
+export HERZEN_ROOT="$(cd "$(dirname "${DIRENV_FILE:-$PWD/.envrc}")" && pwd)"
 export HERZEN_WHISPER_BIN="/opt/homebrew/bin/whisper-cli"
-export HERZEN_WHISPER_MODEL="$PWD/data/models/ggml-base.bin"
+export HERZEN_WHISPER_MODEL="$HERZEN_ROOT/data/models/ggml-base.bin"
 export HERZEN_STT_LANGUAGE="auto"
 export HERZEN_RECORD_SECONDS="3"
 export HERZEN_PLAYBACK="0"
+
+# Recording mode:
+# - fixed (default): always record HERZEN_RECORD_SECONDS
+# - adaptive: stop on trailing silence (with max cap)
+export HERZEN_RECORD_MODE="fixed"
+
+# Adaptive recording tuning (used when HERZEN_RECORD_MODE=adaptive)
+export HERZEN_RECORD_MAX_SECONDS="10"
+export HERZEN_RECORD_MIN_SECONDS="1.0"
+export HERZEN_RECORD_SILENCE_SECONDS="0.8"
+export HERZEN_RECORD_SILENCE_THRESHOLD="1"
+export HERZEN_RECORD_NO_SPEECH_TIMEOUT_SECONDS="2.5"
