@@ -6,11 +6,11 @@ This document describes the current `@herzen/stt` package implementation and how
 
 ## Role of STT in Herzen
 
-`@herzen/stt` provides local transcription from WAV audio files.
+`@herzen/stt` provides local transcription from local audio files.
 
 The package is intentionally narrow:
 
-- input: local WAV file path
+- input: local audio file path
 - output: normalized transcription result
 - failure mode: typed `SttError` codes
 
@@ -40,6 +40,11 @@ Optional performance tuning:
 
 - `HERZEN_STT_THREADS` (positive integer)
 
+Dependencies for file transcription:
+
+- required: whisper.cpp CLI + local model file
+- optional for `.m4a` input: `ffmpeg` (preferred) or `afconvert` (fallback)
+
 ---
 
 ## Public API
@@ -47,10 +52,13 @@ Optional performance tuning:
 `@herzen/stt` exports:
 
 - `transcribeWav(filePath: string, options?: SttOptions): Promise<SttResult>`
+- `transcribeFileToDocument(options): Promise<TranscribeDocumentResult>`
 - `SttError`
 - `SttErrorCode`
 - `SttOptions`
 - `SttResult`
+- `TranscribeFileToDocumentOptions`
+- `TranscribeDocumentResult`
 
 `SttResult` fields:
 
@@ -58,6 +66,77 @@ Optional performance tuning:
 - `language`
 - `backend` (`"whisper.cpp"`)
 - `durationMs`
+
+`TranscribeDocumentResult` fields:
+
+- `outputPath`
+- `text`
+- `language`
+- `durationMs`
+- `format`
+
+---
+
+## Package And Output Structure
+
+Package source layout:
+
+```
+packages/stt/
+  src/transcribe.ts  # whisper runtime wrapper + format conversion
+  src/document.ts    # txt/md output renderer and file writer
+  src/cli.ts         # herzen-stt CLI argument parser and runner
+  src/index.ts       # public exports
+```
+
+Default runtime output folder for file transcription:
+
+```
+data/
+  transcribes/
+```
+
+---
+
+## CLI usage
+
+`@herzen/stt` now ships a CLI entrypoint for file-to-document transcription.
+
+From repository root:
+
+```bash
+pnpm transcribe:file -- "data/audio/sample.wav" --lang en --format md
+```
+
+Arguments:
+
+- required: `<file>` positional or `--input <path>`
+- optional: `--lang auto|en|ru` (default `auto`)
+- optional: `--format txt|md` (default `md`)
+- optional: `--out <output-file-path>`
+- optional: `--name <output-file-basename>`
+
+Default output destination when `--out` is omitted:
+
+- `/Users/parkharo/Programming/herzen/data/transcribes/<sanitized-input-basename>-<timestamp>.<format>`
+
+Output content:
+
+- `txt`: transcript text only
+- `md`: transcript plus metadata (`source path`, requested language mode, detected language, generated timestamp)
+
+Accepted input formats:
+
+- direct: `.wav`, `.mp3`, `.ogg`, `.flac`
+- `.m4a`: auto-converted to wav before whisper invocation
+  - preferred converter: `ffmpeg`
+  - fallback converter: `afconvert` (macOS, best-effort only)
+
+Package-local invocation alternative:
+
+```bash
+pnpm --filter @herzen/stt transcribe:file -- --input "data/audio/sample.wav"
+```
 
 ---
 

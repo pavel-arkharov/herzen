@@ -6,6 +6,7 @@
 		"build": "pnpm -r build",
 		"build:core": "pnpm --filter @herzen/core... build",
 		"build:audio": "pnpm --filter @herzen/audio build",
+		"transcribe:file": "pnpm --filter @herzen/stt build && pnpm --filter @herzen/stt transcribe:file",
 		"dev": "pnpm -C packages/core dev",
 		"start": "pnpm build:core && pnpm --filter @herzen/core start",
 		"test": "vitest run",

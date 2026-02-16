@@ -29,7 +29,7 @@ to keep things simple and debuggable.
 
 Recording APIs:
 - `recordWav(...)` for fixed-duration capture
-- `recordWavAdaptive(...)` for silence-stop capture with max/min/timeout guardrails
+- `recordWavAdaptive(...)` for silence-stop capture with max/min/timeout guardrails (experimental in current runtime behavior)
 
 Current system dependency:
 - `rec` and `play` from SoX
@@ -66,7 +66,7 @@ Current behavior (prototype):
 - uses a trigger abstraction boundary (`core/src/trigger/*`)
 - defaults to `stdin` trigger mode (manual Enter key)
 - supports mode selection through `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`)
-- includes a `wakeword` trigger adapter backed by `@herzen/wakeword`
+- includes a `wakeword` trigger adapter backed by `@herzen/wakeword` (still in-progress for next stretch)
 - uses typed trigger-domain errors for control flow (`SOURCE_CLOSED`, `SOURCE_FAILED`)
 - keeps a runtime-lifecycle `stdin` error listener in the trigger source, including during pipeline handling
 - resolves default data output to repo-local `data/audio` independently of launch cwd
@@ -79,7 +79,8 @@ Current behavior (prototype):
 - emits a short beep
 - records audio to `data/audio` in two modes:
   - fixed: `HERZEN_RECORD_MODE=fixed` (default), duration `HERZEN_RECORD_SECONDS`
-  - adaptive: `HERZEN_RECORD_MODE=adaptive`, end-on-silence with max/min/timeout controls
+  - adaptive (experimental): `HERZEN_RECORD_MODE=adaptive`, end-on-silence with max/min/timeout controls
+- adaptive mode currently does not behave as intended and is treated as a gated startup option for `pnpm dev`
 - validates adaptive env config and falls back to fixed defaults on invalid adaptive input
 - falls back to one fixed recording attempt per turn when adaptive recording fails at runtime
 - runs local STT transcription and logs per-turn telemetry (latency, duration, language mode, detected language, optional error code)
@@ -95,9 +96,21 @@ Local speech-to-text utilities.
 
 This package is responsible for:
 
-- converting local WAV files to text via whisper.cpp CLI
+- converting local audio files to text via whisper.cpp CLI
 - validating STT runtime/model configuration
 - normalizing transcription output and error typing for callers
+- generating per-file transcript documents (`txt` and `md`) via CLI/API helpers
+
+Current input support:
+- direct: `.wav`, `.mp3`, `.ogg`, `.flac`
+- `.m4a`: converted to wav via local tools before transcription
+
+CLI entrypoint:
+- `pnpm transcribe:file -- "<audio-file>"`
+- package binary: `herzen-stt` (built from `dist/cli.js`)
+
+Default file-transcription output path:
+- `data/transcribes/` under repo root when no explicit output path is provided
 
 Current backend:
 - `whisper.cpp` CLI (`whisper-cli` fallback on `PATH`)
@@ -107,6 +120,10 @@ Current environment surface:
 - `HERZEN_WHISPER_BIN` (optional binary path override)
 - `HERZEN_STT_LANGUAGE` (`auto`, `en`, `ru`; optional default mode)
 - `HERZEN_STT_THREADS` (optional positive integer)
+
+Optional local converter dependencies (for `.m4a` input):
+- `ffmpeg` (preferred)
+- `afconvert` (macOS fallback)
 
 Current error model:
 - `RUNTIME_MISSING`

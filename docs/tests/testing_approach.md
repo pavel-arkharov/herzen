@@ -17,6 +17,7 @@ Primary goals:
 - catch regressions in trigger logic and runtime orchestration
 - validate command-wrapper behavior for audio and TTS modules
 - validate whisper.cpp command wiring, output parsing, and STT error behavior
+- validate file-transcription CLI argument handling and document output generation
 - keep tests fast and deterministic (no real audio hardware needed)
 
 ## Tooling
@@ -106,12 +107,17 @@ Optional package-local execution (from package directory):
 - Audio command wrapper arguments and process error handling
   - adaptive recorder timeout guard behavior
 - STT binary/model/env validation + transcription parse and fallback paths
+- STT file-transcription CLI argument parsing and usage error handling
+- STT document rendering and write-path behavior (`txt` and `md`)
+- STT `.m4a` conversion path behavior (`ffmpeg` primary, `afconvert` fallback)
 - TTS language-tag/cyrillic inference branches and process error handling
 - Wakeword socket client lifecycle, protocol parsing, and error semantics
 
 ## Known gaps
 
 - No end-to-end test currently executes the full core runtime loop against real local tools (`rec`, `play`, `say`, `whisper.cpp`).
+- No end-to-end test currently validates wakeword-triggered turns against a live `herzen-wake` daemon.
+- Adaptive recording behavior is covered by unit tests and fallback tests, but current runtime behavior is still considered experimental.
 
 ## Adding new tests
 

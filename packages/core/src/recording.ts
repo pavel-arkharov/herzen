@@ -1,3 +1,5 @@
+import readline from "node:readline";
+
 export type RecordMode = "fixed" | "adaptive";
 
 export interface FixedRecordPlan {
@@ -23,6 +25,7 @@ export interface RecordPlanWarningSink {
 
 export const DEFAULT_FIXED_RECORD_SECONDS = 3;
 export const SAFE_FALLBACK_RECORD_SECONDS = DEFAULT_FIXED_RECORD_SECONDS;
+const DEFAULT_PROMPT_TIMEOUT_MS = 10_000;
 
 const RECORD_SECONDS_LIMITS = { min: 0.2, max: 30 };
 const ADAPTIVE_MAX_SECONDS_LIMITS = { min: 1, max: 30 };
@@ -38,6 +41,21 @@ const ADAPTIVE_DEFAULTS = {
 	silenceThresholdPercent: 1,
 	noSpeechTimeoutSeconds: 2.5,
 };
+
+interface PromptRequest {
+	message: string;
+	defaultValue: string;
+	timeoutMs: number;
+}
+
+type PromptFn = (request: PromptRequest) => Promise<string>;
+
+export interface InitialRecordSelectionOptions {
+	rawMode?: string | undefined;
+	isInteractive?: boolean;
+	promptTimeoutMs?: number;
+	prompt?: PromptFn;
+}
 
 interface ParsedNumber {
 	value: number;
@@ -75,6 +93,96 @@ function resolveFixedRecordSeconds(rawSeconds: string | undefined, warningSink: 
 		`Invalid HERZEN_RECORD_SECONDS "${rawSeconds}". Falling back to ${DEFAULT_FIXED_RECORD_SECONDS.toFixed(1)} seconds.`,
 	);
 	return DEFAULT_FIXED_RECORD_SECONDS;
+}
+
+function parseRecordModeChoice(answer: string, fallbackMode: RecordMode): RecordMode {
+	const normalized = answer.trim().toLowerCase();
+	if (!normalized) return fallbackMode;
+	if (normalized === "1" || normalized === "adaptive") return "adaptive";
+	if (normalized === "2" || normalized === "fixed") return "fixed";
+	return fallbackMode;
+}
+
+function parseFixedSecondsInput(answer: string, fallbackSeconds: number): number {
+	const trimmed = answer.trim();
+	if (!trimmed) return fallbackSeconds;
+	const parsed = Number.parseFloat(trimmed);
+	if (!Number.isFinite(parsed) || parsed <= 0) return fallbackSeconds;
+	return clamp(parsed, RECORD_SECONDS_LIMITS.min, RECORD_SECONDS_LIMITS.max);
+}
+
+function toPromptChoice(mode: RecordMode): string {
+	return mode === "adaptive" ? "1" : "2";
+}
+
+function promptWithTimeout(request: PromptRequest): Promise<string> {
+	return new Promise((resolve) => {
+		const rl = readline.createInterface({
+			input: process.stdin,
+			output: process.stdout,
+		});
+		let settled = false;
+
+		const settle = (value: string) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			rl.close();
+			resolve(value);
+		};
+
+		const timer = setTimeout(() => {
+			process.stdout.write("\n");
+			settle(request.defaultValue);
+		}, request.timeoutMs);
+
+		rl.question(`${request.message} `, (answer) => {
+			settle(answer.trim() || request.defaultValue);
+		});
+	});
+}
+
+export async function resolveInitialRecordEnvOverridesInteractive(
+	options: InitialRecordSelectionOptions = {},
+): Promise<Partial<NodeJS.ProcessEnv>> {
+	const isInteractive = options.isInteractive ?? Boolean(process.stdin.isTTY);
+	if (!isInteractive) return {};
+
+	const prompt = options.prompt ?? promptWithTimeout;
+	const timeoutMs = options.promptTimeoutMs ?? DEFAULT_PROMPT_TIMEOUT_MS;
+	const configuredMode = resolveConfiguredMode(options.rawMode ?? process.env.HERZEN_RECORD_MODE);
+	const defaultFixedSeconds = DEFAULT_FIXED_RECORD_SECONDS;
+
+	const modeAnswer = await prompt({
+		message: "Choose recording mode: [1] Adaptive, [2] Fixed",
+		defaultValue: toPromptChoice(configuredMode),
+		timeoutMs,
+	});
+	const mode = parseRecordModeChoice(modeAnswer, configuredMode);
+
+	if (mode === "adaptive") {
+		return {
+			HERZEN_RECORD_MODE: "adaptive",
+		};
+	}
+
+	const secondsAnswer = await prompt({
+		message: "Enter the length (3 default)",
+		defaultValue: String(defaultFixedSeconds),
+		timeoutMs,
+	});
+	const seconds = parseFixedSecondsInput(secondsAnswer, defaultFixedSeconds);
+
+	return {
+		HERZEN_RECORD_MODE: "fixed",
+		HERZEN_RECORD_SECONDS: String(seconds),
+	};
+}
+
+function resolveConfiguredMode(rawMode: string | undefined): RecordMode {
+	const normalized = rawMode?.trim().toLowerCase();
+	if (normalized === "adaptive") return "adaptive";
+	return "fixed";
 }
 
 function fallbackToFixedWithWarning(warningSink: RecordPlanWarningSink, reason: string): FixedRecordPlan {

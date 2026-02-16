@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { format } from "node:util";
 import { speak } from "@herzen/tts";
 import { createLogger, toStructuredSttTurnEntry } from "./logging.js";
+import { resolveInitialRecordEnvOverridesInteractive } from "./recording.js";
 import { createRuntime, type RuntimeController } from "./runtime.js";
 import { createSttTriggerHandler, type SttLogEntry } from "./turn.js";
 import {
@@ -75,6 +76,7 @@ const runtimeLogger = {
 };
 
 let runtime: RuntimeController | null = null;
+let runtimeRecordEnvOverrides: Partial<NodeJS.ProcessEnv> = {};
 
 async function flushAndExit(code: number): Promise<void> {
 	await Promise.all([coreLogger.drain(), triggerLogger.drain(), sttLogger.drain()]);
@@ -133,7 +135,7 @@ async function recordAdaptiveWithProgress(file: string, options: AdaptiveRecordO
 
 const handleTrigger = createSttTriggerHandler({
 	outDir,
-	getEnv: () => process.env,
+	getEnv: () => ({ ...process.env, ...runtimeRecordEnvOverrides }),
 	now: () => Date.now(),
 	nowIso: () => new Date().toISOString(),
 	logger: sttTurnLogger,
@@ -150,14 +152,17 @@ const handleTrigger = createSttTriggerHandler({
 interface StartupTriggerRuntimeConfig {
 	triggerMode: TriggerMode;
 	createSource: (mode: TriggerMode) => TriggerSource;
+	recordEnvOverrides: Partial<NodeJS.ProcessEnv>;
 }
 
 async function resolveStartupTriggerRuntimeConfig(): Promise<StartupTriggerRuntimeConfig> {
 	const selectedMode = await resolveInitialTriggerModeInteractive();
+	const recordEnvOverrides = await resolveInitialRecordEnvOverridesInteractive();
 	if (selectedMode !== "wakeword") {
 		return {
 			triggerMode: selectedMode,
 			createSource: createTriggerSource,
+			recordEnvOverrides,
 		};
 	}
 
@@ -166,6 +171,7 @@ async function resolveStartupTriggerRuntimeConfig(): Promise<StartupTriggerRunti
 		await wakewordSource.start();
 		return {
 			triggerMode: "wakeword",
+			recordEnvOverrides,
 			createSource: (mode) => {
 				if (mode !== "wakeword") return createTriggerSource(mode);
 				return createPrestartedSource(wakewordSource);
@@ -184,6 +190,7 @@ async function resolveStartupTriggerRuntimeConfig(): Promise<StartupTriggerRunti
 				return {
 					triggerMode: "stdin",
 					createSource: createTriggerSource,
+					recordEnvOverrides,
 				};
 			}
 		}
@@ -223,6 +230,7 @@ async function main(): Promise<void> {
 		await flushAndExit(1);
 		return;
 	}
+	runtimeRecordEnvOverrides = startupConfig.recordEnvOverrides;
 
 	runtime = createRuntime({
 		resolveTriggerMode: () => startupConfig.triggerMode,

@@ -271,4 +271,79 @@ describe("transcribeWav", () => {
 		});
 		expect(mocks.rm).toHaveBeenCalledWith("/tmp/herzen-stt-test", { recursive: true, force: true });
 	});
+
+	it("transcodes .m4a input to wav before whisper transcription", async () => {
+		process.env.HERZEN_WHISPER_BIN = "whisper-cli";
+		process.env.HERZEN_WHISPER_MODEL = "/models/ggml-base.bin";
+
+		withSpawnPlan([
+			closeWith(0, { stdout: "whisper help" }),
+			closeWith(0),
+			closeWith(0, { stdout: "ok" }),
+		]);
+
+		await transcribeWav("/tmp/input.m4a");
+
+		expect(mocks.spawn).toHaveBeenCalledTimes(3);
+		expect(mocks.spawn).toHaveBeenNthCalledWith(
+			2,
+			"ffmpeg",
+			[
+				"-y",
+				"-i",
+				"/tmp/input.m4a",
+				"-ar",
+				"16000",
+				"-ac",
+				"1",
+				"-c:a",
+				"pcm_s16le",
+				"/tmp/herzen-stt-test/input.wav",
+			],
+			{ stdio: ["ignore", "pipe", "pipe"] },
+		);
+		expect(mocks.spawn).toHaveBeenNthCalledWith(
+			3,
+			"whisper-cli",
+			expect.arrayContaining(["-f", "/tmp/herzen-stt-test/input.wav"]),
+			{ stdio: ["ignore", "pipe", "pipe"] },
+		);
+	});
+
+	it("falls back to afconvert when ffmpeg is unavailable", async () => {
+		process.env.HERZEN_WHISPER_BIN = "whisper-cli";
+		process.env.HERZEN_WHISPER_MODEL = "/models/ggml-base.bin";
+
+		const ffmpegMissing = Object.assign(new Error("not found"), { code: "ENOENT" });
+
+		withSpawnPlan([
+			closeWith(0, { stdout: "whisper help" }),
+			failWith(ffmpegMissing),
+			closeWith(0),
+			closeWith(0, { stdout: "ok" }),
+		]);
+
+		await transcribeWav("/tmp/input.m4a");
+
+		expect(mocks.spawn).toHaveBeenCalledTimes(4);
+		expect(mocks.spawn).toHaveBeenNthCalledWith(
+			3,
+			"afconvert",
+			["-f", "WAVE", "-d", "LEI16", "/tmp/input.m4a", "/tmp/herzen-stt-test/input.wav"],
+			{ stdio: ["ignore", "pipe", "pipe"] },
+		);
+	});
+
+	it("rejects unsupported input extensions early", async () => {
+		process.env.HERZEN_WHISPER_BIN = "whisper-cli";
+		process.env.HERZEN_WHISPER_MODEL = "/models/ggml-base.bin";
+
+		withSpawnPlan([closeWith(0, { stdout: "whisper help" })]);
+
+		await expect(transcribeWav("/tmp/input.aac")).rejects.toMatchObject({
+			name: "SttError",
+			code: "TRANSCRIBE_FAILED",
+			message: 'Unsupported input format ".aac". Supported: .wav, .mp3, .ogg, .flac, .m4a.',
+		});
+	});
 });

@@ -88,8 +88,44 @@ export async function recordWavAdaptive(outFile: string, options: AdaptiveRecord
 		let speechDetected = false;
 		let minSecondsReached = options.minSeconds <= 0;
 		let hardKillTimer: NodeJS.Timeout | undefined;
-		let speechPoller: NodeJS.Timeout | undefined;
-		let noSpeechWatchdog: NodeJS.Timeout | undefined;
+		const speechPoller: NodeJS.Timeout = setInterval(() => {
+			if (speechDetected) return;
+			try {
+				const stats = statSync(outFile);
+				if (stats.size <= speechDataBytesThreshold) return;
+				speechDetected = true;
+			} catch {
+				// File may not exist yet while rec is waiting for speech.
+			}
+		}, 100);
+		const noSpeechWatchdog: NodeJS.Timeout = setInterval(() => {
+			if (speechDetected) return;
+			const elapsedMs = Date.now() - startedAt;
+			if (elapsedMs < noSpeechTimeoutMs) return;
+
+			let fileExists = false;
+			let hasAudioData = false;
+			try {
+				const stats = statSync(outFile);
+				fileExists = true;
+				hasAudioData = stats.size > speechDataBytesThreshold;
+			} catch {
+				// File may not exist yet while rec is waiting for speech.
+			}
+
+			if (hasAudioData) {
+				speechDetected = true;
+				return;
+			}
+
+			// Only enforce timeout when there is affirmative silence evidence.
+			if (!hasMeterSamples && !fileExists) return;
+
+			terminate();
+			finish(() => {
+				reject(new Error("Adaptive recording timed out waiting for speech."));
+			});
+		}, 100);
 		let hasMeterSamples = false;
 
 		const finish = (handler: () => void) => {
@@ -97,8 +133,8 @@ export async function recordWavAdaptive(outFile: string, options: AdaptiveRecord
 			settled = true;
 			clearTimeout(minTimer);
 			clearTimeout(maxGuardTimer);
-			if (speechPoller) clearInterval(speechPoller);
-			if (noSpeechWatchdog) clearInterval(noSpeechWatchdog);
+			clearInterval(speechPoller);
+			clearInterval(noSpeechWatchdog);
 			handler();
 		};
 
@@ -127,46 +163,6 @@ export async function recordWavAdaptive(outFile: string, options: AdaptiveRecord
 				reject(new Error("Adaptive recording exceeded maximum duration guard."));
 			});
 		}, Math.max(0, maxGuardMs));
-
-		speechPoller = setInterval(() => {
-			if (speechDetected) return;
-			try {
-				const stats = statSync(outFile);
-				if (stats.size <= speechDataBytesThreshold) return;
-				speechDetected = true;
-			} catch {
-				// File may not exist yet while rec is waiting for speech.
-			}
-		}, 100);
-
-		noSpeechWatchdog = setInterval(() => {
-			if (speechDetected) return;
-			const elapsedMs = Date.now() - startedAt;
-			if (elapsedMs < noSpeechTimeoutMs) return;
-
-			let fileExists = false;
-			let hasAudioData = false;
-			try {
-				const stats = statSync(outFile);
-				fileExists = true;
-				hasAudioData = stats.size > speechDataBytesThreshold;
-			} catch {
-				// File may not exist yet while rec is waiting for speech.
-			}
-
-			if (hasAudioData) {
-				speechDetected = true;
-				return;
-			}
-
-			// Only enforce timeout when there is affirmative silence evidence.
-			if (!hasMeterSamples && !fileExists) return;
-
-			terminate();
-			finish(() => {
-				reject(new Error("Adaptive recording timed out waiting for speech."));
-			});
-		}, 100);
 
 		child.stderr?.on("data", (chunk) => {
 			const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");

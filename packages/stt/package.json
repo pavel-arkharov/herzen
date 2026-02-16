@@ -4,11 +4,15 @@
 	"type": "module",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
+	"bin": {
+		"herzen-stt": "dist/cli.js"
+	},
 	"exports": {
 		".": "./dist/index.js"
 	},
 	"scripts": {
 		"build": "tsc -p tsconfig.json",
+		"transcribe:file": "node --enable-source-maps dist/cli.js",
 		"lint": "eslint . --format json",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"test": "vitest run tests",

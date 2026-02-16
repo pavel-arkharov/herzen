@@ -38,16 +38,18 @@ At the moment, the system supports:
 - local audio playback
 - a minimal “assistant core” loop that coordinates actions
 - initial local speech-to-text via `@herzen/stt` (whisper.cpp CLI wrapper)
+- per-file audio-to-text transcription via `pnpm transcribe:file` (txt or markdown output)
 - a trigger source boundary with `stdin` mode by default (`Enter` trigger)
-- selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`)
-- wakeword sidecar integration via `@herzen/wakeword` (Unix socket JSONL client for `herzen-wake`)
+- selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`) plus interactive startup prompt
+- wakeword sidecar integration via `@herzen/wakeword` (Unix socket JSONL client for `herzen-wake`), with trigger path still in-progress for the next working stretch
 - dual recording modes via `HERZEN_RECORD_MODE`:
   - `fixed` (default): fixed `HERZEN_RECORD_SECONDS`
-  - `adaptive`: stop on trailing silence with max/min/timeout guardrails
+  - `adaptive` (experimental): stop on trailing silence with max/min/timeout guardrails
+- adaptive recording currently does not behave as intended; for now it is gated behind the interactive startup selector used in `pnpm dev`
 - stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override
 - local text-to-speech via macOS `say`
 
-Wakeword detection runs via openWakeWord in a separate local daemon process (no service key dependency).
+Wakeword daemon/client contracts are in place, but reliable wakeword-triggered turns are still treated as next-stretch implementation work.
 
 ---
 
@@ -57,6 +59,7 @@ Wakeword detection runs via openWakeWord in a separate local daemon process (no 
 - macOS `say` for text-to-speech
 - whisper.cpp CLI (`whisper-cli` on PATH or `HERZEN_WHISPER_BIN`) for STT transcription
 - local whisper model file path via `HERZEN_WHISPER_MODEL` for STT transcription
+- optional for `.m4a` file transcription: `ffmpeg` (preferred) or `afconvert` (macOS fallback)
 
 ---
 
@@ -69,11 +72,49 @@ packages/
   audio/ # audio input/output utilities
   stt/ # speech-to-text utilities
   tts/ # text-to-speech utilities
+  wakeword/ # wakeword sidecar client utilities
 data/ # local-only runtime data (gitignored)
+  audio/
+  logs/
+  transcribes/
 docs/ # architecture, packages, and design notes
 ```
 
 Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`, `packages/wakeword`.
+
+---
+
+## File Transcription
+
+Run audio-to-text transcription for a single file:
+
+```bash
+# from repository root
+pnpm transcribe:file -- "data/audio/sample.wav"
+
+# force language + markdown output
+pnpm transcribe:file -- "data/audio/sample.wav" --lang en --format md
+
+# explicit input flag and custom output path
+pnpm transcribe:file -- --input "meeting.m4a" --out "data/transcribes/meeting.txt" --format txt
+```
+
+CLI options:
+
+- input: positional `<file>` or `--input <path>`
+- language: `--lang auto|en|ru` (default `auto`)
+- format: `--format txt|md` (default `md`)
+- output file: `--out <path>`
+- output basename: `--name <base-name>`
+
+Default output path when `--out` is omitted:
+
+- `data/transcribes/<sanitized-input-name>-<timestamp>.<format>`
+
+Supported input formats:
+
+- direct: `.wav`, `.mp3`, `.ogg`, `.flac`
+- auto-converted: `.m4a` (via `ffmpeg` or `afconvert`)
 
 ---
 
@@ -89,7 +130,7 @@ Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tt
   - `pnpm test:tts`
   - `pnpm test:wakeword`
 
-Current baseline is focused unit coverage for trigger handling, STT/core turn orchestration, and package command-wrapper behavior.
+Current baseline is focused unit coverage for trigger handling, STT/core turn orchestration, file-transcription CLI/document generation, and package command-wrapper behavior.
 
 ---
 

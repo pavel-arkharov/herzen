@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
 	formatRecordStartLabel,
+	resolveInitialRecordEnvOverridesInteractive,
 	resolveRecordPlan,
 	SAFE_FALLBACK_RECORD_SECONDS,
 } from "../src/recording.js";
@@ -88,5 +89,91 @@ describe("formatRecordStartLabel", () => {
 				fallbackSeconds: 3,
 			}),
 		).toBe("Recording (adaptive, max 10.0s)…");
+	});
+});
+
+describe("resolveInitialRecordEnvOverridesInteractive", () => {
+	it("returns no overrides when not interactive", async () => {
+		await expect(
+			resolveInitialRecordEnvOverridesInteractive({
+				isInteractive: false,
+			}),
+		).resolves.toEqual({});
+	});
+
+	it("returns adaptive overrides when adaptive is chosen", async () => {
+		const prompt = vi.fn(async () => "1");
+		await expect(
+			resolveInitialRecordEnvOverridesInteractive({
+				isInteractive: true,
+				prompt,
+				rawMode: "fixed",
+			}),
+		).resolves.toEqual({
+			HERZEN_RECORD_MODE: "adaptive",
+		});
+		expect(prompt).toHaveBeenCalledTimes(1);
+	});
+
+	it("returns fixed defaults when fixed is chosen and input is empty", async () => {
+		const prompt = vi
+			.fn<(_: { message: string; defaultValue: string; timeoutMs: number }) => Promise<string>>()
+			.mockResolvedValueOnce("2")
+			.mockResolvedValueOnce("");
+
+		await expect(
+			resolveInitialRecordEnvOverridesInteractive({
+				isInteractive: true,
+				prompt,
+				rawMode: "fixed",
+			}),
+		).resolves.toEqual({
+			HERZEN_RECORD_MODE: "fixed",
+			HERZEN_RECORD_SECONDS: "3",
+		});
+		expect(prompt).toHaveBeenCalledTimes(2);
+		expect(prompt).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				message: "Enter the length (3 default)",
+				defaultValue: "3",
+			}),
+		);
+	});
+
+	it("falls back to fixed default when fixed length input is invalid", async () => {
+		const prompt = vi
+			.fn<(_: { message: string; defaultValue: string; timeoutMs: number }) => Promise<string>>()
+			.mockResolvedValueOnce("2")
+			.mockResolvedValueOnce("abc");
+
+		await expect(
+			resolveInitialRecordEnvOverridesInteractive({
+				isInteractive: true,
+				prompt,
+				rawMode: "fixed",
+			}),
+		).resolves.toEqual({
+			HERZEN_RECORD_MODE: "fixed",
+			HERZEN_RECORD_SECONDS: "3",
+		});
+	});
+
+	it("uses provided fixed length and clamps upper bound", async () => {
+		const prompt = vi
+			.fn<(_: { message: string; defaultValue: string; timeoutMs: number }) => Promise<string>>()
+			.mockResolvedValueOnce("2")
+			.mockResolvedValueOnce("120");
+
+		await expect(
+			resolveInitialRecordEnvOverridesInteractive({
+				isInteractive: true,
+				prompt,
+				rawMode: "adaptive",
+			}),
+		).resolves.toEqual({
+			HERZEN_RECORD_MODE: "fixed",
+			HERZEN_RECORD_SECONDS: "30",
+		});
 	});
 });
