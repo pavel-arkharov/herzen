@@ -5,6 +5,10 @@ export HERZEN_STT_LANGUAGE="auto"
 export HERZEN_RECORD_SECONDS="3"
 export HERZEN_PLAYBACK="0"
 
+# Wakeword sidecar mode (optional)
+# export HERZEN_TRIGGER_MODE="wakeword"
+# export HERZEN_WAKEWORD_SOCKET="$(cd "$HERZEN_ROOT/.." && pwd)/herzen-wake/run/wakeword.sock"
+
 # Recording mode:
 # - fixed (default): always record HERZEN_RECORD_SECONDS
 # - adaptive: stop on trailing silence (with max cap)
