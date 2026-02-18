@@ -42,10 +42,7 @@ At the moment, the system supports:
 - a trigger source boundary with `stdin` mode by default (`Enter` trigger)
 - selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`) plus interactive startup prompt
 - wakeword sidecar integration via `@herzen/wakeword` (Unix socket JSONL client for `herzen-wake`), with trigger path still in-progress for the next working stretch
-- dual recording modes via `HERZEN_RECORD_MODE`:
-  - `fixed` (default): fixed `HERZEN_RECORD_SECONDS`
-  - `adaptive` (experimental): stop on trailing silence with max/min/timeout guardrails
-- adaptive recording currently does not behave as intended; for now it is gated behind the interactive startup selector used in `pnpm dev`
+- fixed-length recording via `HERZEN_RECORD_SECONDS` (default `3`)
 - stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override
 - local text-to-speech via macOS `say`
 

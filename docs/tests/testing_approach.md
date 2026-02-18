@@ -100,12 +100,9 @@ Optional package-local execution (from package directory):
 - STT/core trigger-turn orchestration (`createSttTriggerHandler`) including:
   - transcript success path
   - empty-transcript fallback speech
-  - fixed vs adaptive recording mode selection
-  - adaptive runtime failure fallback to fixed recording
   - typed and unknown STT failure handling
   - STT log entry shape and playback toggle behavior
 - Audio command wrapper arguments and process error handling
-  - adaptive recorder timeout guard behavior
 - STT binary/model/env validation + transcription parse and fallback paths
 - STT file-transcription CLI argument parsing and usage error handling
 - STT document rendering and write-path behavior (`txt` and `md`)
@@ -117,7 +114,6 @@ Optional package-local execution (from package directory):
 
 - No end-to-end test currently executes the full core runtime loop against real local tools (`rec`, `play`, `say`, `whisper.cpp`).
 - No end-to-end test currently validates wakeword-triggered turns against a live `herzen-wake` daemon.
-- Adaptive recording behavior is covered by unit tests and fallback tests, but current runtime behavior is still considered experimental.
 
 ## Adding new tests
 

@@ -29,7 +29,6 @@ to keep things simple and debuggable.
 
 Recording APIs:
 - `recordWav(...)` for fixed-duration capture
-- `recordWavAdaptive(...)` for silence-stop capture with max/min/timeout guardrails (experimental in current runtime behavior)
 
 Current system dependency:
 - `rec` and `play` from SoX
@@ -77,12 +76,7 @@ Current behavior (prototype):
 - gates transcript persistence in logs with `HERZEN_LOG_TRANSCRIPT` (default disabled)
 - sanitizes JSONL stream names and degrades logging sink failures to console warnings
 - emits a short beep
-- records audio to `data/audio` in two modes:
-  - fixed: `HERZEN_RECORD_MODE=fixed` (default), duration `HERZEN_RECORD_SECONDS`
-  - adaptive (experimental): `HERZEN_RECORD_MODE=adaptive`, end-on-silence with max/min/timeout controls
-- adaptive mode currently does not behave as intended and is treated as a gated startup option for `pnpm dev`
-- validates adaptive env config and falls back to fixed defaults on invalid adaptive input
-- falls back to one fixed recording attempt per turn when adaptive recording fails at runtime
+- records audio to `data/audio` with fixed duration (`HERZEN_RECORD_SECONDS`, default `3`)
 - runs local STT transcription and logs per-turn telemetry (latency, duration, language mode, detected language, optional error code)
 - plays the recording only when `HERZEN_PLAYBACK=1`
 - speaks transcript-aware confirmation or a fallback message

@@ -1,4 +1,4 @@
-import { recordWav, recordWavAdaptive, playAudio, beep, type AdaptiveRecordOptions } from "@herzen/audio";
+import { recordWav, playAudio, beep } from "@herzen/audio";
 import { transcribeWav, SttError } from "@herzen/stt";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 import { format } from "node:util";
 import { speak } from "@herzen/tts";
 import { createLogger, toStructuredSttTurnEntry } from "./logging.js";
-import { resolveInitialRecordEnvOverridesInteractive } from "./recording.js";
 import { createRuntime, type RuntimeController } from "./runtime.js";
 import { createSttTriggerHandler, type SttLogEntry } from "./turn.js";
 import {
@@ -76,7 +75,6 @@ const runtimeLogger = {
 };
 
 let runtime: RuntimeController | null = null;
-let runtimeRecordEnvOverrides: Partial<NodeJS.ProcessEnv> = {};
 
 async function flushAndExit(code: number): Promise<void> {
 	await Promise.all([coreLogger.drain(), triggerLogger.drain(), sttLogger.drain()]);
@@ -107,41 +105,16 @@ async function recordWithProgress(file: string, seconds: number): Promise<void> 
 	}
 }
 
-async function recordAdaptiveWithProgress(file: string, options: AdaptiveRecordOptions): Promise<void> {
-	const startedAt = Date.now();
-	const spinner = ["|", "/", "-", "\\"];
-	let idx = 0;
-
-	const render = (forceDone = false) => {
-		const elapsedSeconds = Math.min((Date.now() - startedAt) / 1000, options.maxSeconds);
-		const frame = forceDone ? " " : spinner[idx % spinner.length];
-		idx += 1;
-		process.stdout.write(
-			`\rRecording ${frame} ${elapsedSeconds.toFixed(1)}s (max ${options.maxSeconds.toFixed(1)}s)`,
-		);
-		if (forceDone) process.stdout.write("\n");
-	};
-
-	render(false);
-	const ticker = setInterval(() => render(false), 120);
-
-	try {
-		await recordWavAdaptive(file, options);
-	} finally {
-		clearInterval(ticker);
-		render(true);
-	}
-}
-
 const handleTrigger = createSttTriggerHandler({
 	outDir,
-	getEnv: () => ({ ...process.env, ...runtimeRecordEnvOverrides }),
+	getEnv: () => process.env,
 	now: () => Date.now(),
 	nowIso: () => new Date().toISOString(),
 	logger: sttTurnLogger,
-	beep,
-	recordFixedAudio: recordWithProgress,
-	recordAdaptiveAudio: recordAdaptiveWithProgress,
+	recordAudio: async (file, seconds) => {
+		await beep();
+		await recordWithProgress(file, seconds);
+	},
 	transcribeWav,
 	isSttError: (err): err is SttError => err instanceof SttError,
 	appendSttLog,
@@ -152,17 +125,14 @@ const handleTrigger = createSttTriggerHandler({
 interface StartupTriggerRuntimeConfig {
 	triggerMode: TriggerMode;
 	createSource: (mode: TriggerMode) => TriggerSource;
-	recordEnvOverrides: Partial<NodeJS.ProcessEnv>;
 }
 
 async function resolveStartupTriggerRuntimeConfig(): Promise<StartupTriggerRuntimeConfig> {
 	const selectedMode = await resolveInitialTriggerModeInteractive();
-	const recordEnvOverrides = await resolveInitialRecordEnvOverridesInteractive();
 	if (selectedMode !== "wakeword") {
 		return {
 			triggerMode: selectedMode,
 			createSource: createTriggerSource,
-			recordEnvOverrides,
 		};
 	}
 
@@ -171,7 +141,6 @@ async function resolveStartupTriggerRuntimeConfig(): Promise<StartupTriggerRunti
 		await wakewordSource.start();
 		return {
 			triggerMode: "wakeword",
-			recordEnvOverrides,
 			createSource: (mode) => {
 				if (mode !== "wakeword") return createTriggerSource(mode);
 				return createPrestartedSource(wakewordSource);
@@ -190,7 +159,6 @@ async function resolveStartupTriggerRuntimeConfig(): Promise<StartupTriggerRunti
 				return {
 					triggerMode: "stdin",
 					createSource: createTriggerSource,
-					recordEnvOverrides,
 				};
 			}
 		}
@@ -230,7 +198,6 @@ async function main(): Promise<void> {
 		await flushAndExit(1);
 		return;
 	}
-	runtimeRecordEnvOverrides = startupConfig.recordEnvOverrides;
 
 	runtime = createRuntime({
 		resolveTriggerMode: () => startupConfig.triggerMode,

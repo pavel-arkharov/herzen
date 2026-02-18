@@ -15,8 +15,6 @@ function createDeps(overrides?: {
 	nowSequence?: number[];
 	transcribeImpl?: (file: string) => Promise<{ text: string; language: string; durationMs: number }>;
 	isSttError?: (err: unknown) => err is SttErrorLike;
-	recordAdaptiveImpl?: (file: string, options: Record<string, number>) => Promise<void>;
-	recordFixedImpl?: (file: string, seconds: number) => Promise<void>;
 }) {
 	const logger = {
 		log: vi.fn(),
@@ -26,12 +24,7 @@ function createDeps(overrides?: {
 	const appendSttLog = vi.fn(async (entry: SttLogEntry) => {
 		void entry;
 	});
-	const beep = vi.fn(async () => {});
-	const recordFixedAudio = vi.fn(overrides?.recordFixedImpl ?? (async () => {}));
-	const recordAdaptiveAudio = vi.fn(
-		overrides?.recordAdaptiveImpl ??
-			(async () => {}),
-	);
+	const recordAudio = vi.fn(async () => {});
 	const playAudio = vi.fn(async () => {});
 	const speak = vi.fn(async () => {});
 	const transcribeWav =
@@ -48,9 +41,7 @@ function createDeps(overrides?: {
 		now,
 		nowIso: () => "2026-02-14T00:00:00.000Z",
 		logger,
-		beep,
-		recordFixedAudio,
-		recordAdaptiveAudio,
+		recordAudio,
 		transcribeWav,
 		isSttError,
 		appendSttLog,
@@ -63,9 +54,7 @@ function createDeps(overrides?: {
 		logger,
 		now,
 		appendSttLog,
-		beep,
-		recordFixedAudio,
-		recordAdaptiveAudio,
+		recordAudio,
 		playAudio,
 		speak,
 	};
@@ -73,7 +62,7 @@ function createDeps(overrides?: {
 
 describe("createSttTriggerHandler", () => {
 	it("handles successful STT result and uses confirmation speech", async () => {
-		const { deps, logger, appendSttLog, beep, recordFixedAudio, playAudio, speak } = createDeps({
+		const { deps, logger, appendSttLog, recordAudio, playAudio, speak } = createDeps({
 			env: {
 				HERZEN_STT_LANGUAGE: "en",
 				HERZEN_RECORD_SECONDS: "5",
@@ -89,8 +78,7 @@ describe("createSttTriggerHandler", () => {
 
 		await handleTrigger();
 
-		expect(beep).toHaveBeenCalledTimes(1);
-		expect(recordFixedAudio).toHaveBeenCalledWith("/tmp/audio/test-1000.wav", 5);
+		expect(recordAudio).toHaveBeenCalledWith("/tmp/audio/test-1000.wav", 5);
 		expect(playAudio).toHaveBeenCalledWith("/tmp/audio/test-1000.wav");
 		expect(speak).toHaveBeenCalledWith("[en] I heard: hello world");
 		expect(logger.log).toHaveBeenCalledWith("[en detected]");
@@ -127,52 +115,6 @@ describe("createSttTriggerHandler", () => {
 				errorCode: undefined,
 				language: "en",
 			}),
-		);
-	});
-
-	it("uses adaptive mode when configured and passes adaptive recording options", async () => {
-		const { deps, recordAdaptiveAudio, recordFixedAudio, logger } = createDeps({
-			env: {
-				HERZEN_RECORD_MODE: "adaptive",
-				HERZEN_RECORD_MAX_SECONDS: "12",
-				HERZEN_RECORD_MIN_SECONDS: "1.5",
-				HERZEN_RECORD_SILENCE_SECONDS: "0.9",
-				HERZEN_RECORD_SILENCE_THRESHOLD: "2",
-				HERZEN_RECORD_NO_SPEECH_TIMEOUT_SECONDS: "3",
-			},
-		});
-		const handleTrigger = createSttTriggerHandler(deps);
-
-		await handleTrigger();
-
-		expect(recordAdaptiveAudio).toHaveBeenCalledWith("/tmp/audio/test-1000.wav", {
-			maxSeconds: 12,
-			minSeconds: 1.5,
-			silenceSeconds: 0.9,
-			silenceThresholdPercent: 2,
-			noSpeechTimeoutSeconds: 3,
-		});
-		expect(recordFixedAudio).not.toHaveBeenCalled();
-		expect(logger.log).toHaveBeenCalledWith("Triggered. Recording (adaptive, max 12.0s)…");
-	});
-
-	it("falls back to fixed recording when adaptive recording fails", async () => {
-		const { deps, logger, recordAdaptiveAudio, recordFixedAudio } = createDeps({
-			env: {
-				HERZEN_RECORD_MODE: "adaptive",
-			},
-			recordAdaptiveImpl: async () => {
-				throw new Error("Adaptive recording timed out waiting for speech.");
-			},
-		});
-		const handleTrigger = createSttTriggerHandler(deps);
-
-		await handleTrigger();
-
-		expect(recordAdaptiveAudio).toHaveBeenCalledTimes(1);
-		expect(recordFixedAudio).toHaveBeenCalledWith("/tmp/audio/test-1000.wav", 3);
-		expect(logger.error).toHaveBeenCalledWith(
-			expect.stringContaining("Adaptive recording failed (Adaptive recording timed out waiting for speech.)"),
 		);
 	});
 

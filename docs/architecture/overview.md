@@ -62,18 +62,7 @@ Shared contract for both repos:
 
 When triggered, the core currently:
 - emits a short beep
-- records audio into `data/audio` using `HERZEN_RECORD_MODE`:
-  - `fixed` (default): `HERZEN_RECORD_SECONDS` (default `3`)
-  - `adaptive` (experimental): silence-stop recording with:
-    - max cap `HERZEN_RECORD_MAX_SECONDS` (default `10`)
-    - min capture `HERZEN_RECORD_MIN_SECONDS` (default `1.0`)
-    - trailing silence `HERZEN_RECORD_SILENCE_SECONDS` (default `0.8`)
-    - silence threshold `HERZEN_RECORD_SILENCE_THRESHOLD` percent (default `1`)
-    - no-speech timeout `HERZEN_RECORD_NO_SPEECH_TIMEOUT_SECONDS` (default `2.5`)
-  - adaptive mode is currently known to be unreliable and does not yet behave as intended
-  - adaptive mode is presently exposed via the interactive startup mode selector (`pnpm dev` in TTY)
-  - invalid adaptive config falls back to fixed defaults for the current run
-  - adaptive runtime failures fall back to one fixed recording attempt for the current turn
+- records audio into `data/audio` for fixed duration (`HERZEN_RECORD_SECONDS`, default `3`)
 - runs local STT via `@herzen/stt` (`transcribeWav`)
 - appends one structured STT event per trigger to `data/logs/stt.jsonl`
 - optionally plays the recorded file when `HERZEN_PLAYBACK=1`
