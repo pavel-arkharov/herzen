@@ -171,4 +171,28 @@ describe("toStructuredSttTurnEntry", () => {
 		const withTranscript = toStructuredSttTurnEntry(baseEntry, { transcriptEnabled: true });
 		expect(withTranscript.fields).toHaveProperty("transcript", "hello world");
 	});
+
+	it("marks llm failures as error level even without STT error code", () => {
+		const entry = toStructuredSttTurnEntry(
+			{
+				timestamp: "2026-02-14T00:00:00.000Z",
+				audioFile: "/tmp/audio/test.wav",
+				durationMs: 222,
+				latencyMs: 250,
+				languageMode: "auto",
+				language: "en",
+				transcript: "hello",
+				errorCode: undefined,
+				llmOutcome: "error",
+				llmErrorCode: "RUNTIME_UNAVAILABLE",
+			},
+			{ transcriptEnabled: false },
+		);
+
+		expect(entry.level).toBe("error");
+		expect(entry.fields).toMatchObject({
+			llmOutcome: "error",
+			llmErrorCode: "RUNTIME_UNAVAILABLE",
+		});
+	});
 });

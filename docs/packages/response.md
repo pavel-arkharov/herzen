@@ -23,12 +23,14 @@ Implemented now:
 - typed response domain model (`ResponseInput`, `ResponseOutput`, `ResponseError`)
 - provider selection surface (`HERZEN_RESPONSE_PROVIDER`)
 - Ollama config validation and local-only guardrails
-- initial Ollama provider entrypoint
+- Ollama provider generation path (`POST /api/chat`, `stream: false`)
+- timeout/connection error mapping and output validation
 
 Not implemented yet:
 
-- actual Ollama generation request/response handling
-- core integration that replaces transcript confirmation speech
+- tool/function calling
+- memory/tool context injection
+- streaming token output
 
 ---
 
@@ -69,4 +71,4 @@ Local-only policy:
 
 ## Next Step
 
-Implement Ollama generation path and wire `@herzen/core` STT-success branch to use `@herzen/response`.
+Extend beyond MVP reply generation (tools, memory, and richer response policies) while keeping local-first runtime guarantees.

@@ -1,4 +1,5 @@
 import { recordWav, recordAdaptiveWav, playAudio, beep } from "@herzen/audio";
+import { createResponseService } from "@herzen/response";
 import { transcribeWav, SttError } from "@herzen/stt";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -12,7 +13,11 @@ import {
 	type RecordingMode,
 } from "./recording/factory.js";
 import { createRuntime, type RuntimeController } from "./runtime.js";
-import { createSttTriggerHandler, type SttLogEntry } from "./turn.js";
+import {
+	createSttTriggerHandler,
+	type ResponseErrorLike,
+	type SttLogEntry,
+} from "./turn.js";
 import {
 	createTriggerSource,
 	resolveInitialTriggerModeInteractive,
@@ -115,6 +120,7 @@ function createHandleTrigger(
 	envOverrides: NodeJS.ProcessEnv,
 ): () => Promise<void> {
 	const getRuntimeEnv = () => ({ ...process.env, ...envOverrides });
+	const responseService = resolveResponseService(getRuntimeEnv());
 
 	return createSttTriggerHandler({
 		outDir,
@@ -138,10 +144,40 @@ function createHandleTrigger(
 		},
 		transcribeWav,
 		isSttError: (err): err is SttError => err instanceof SttError,
+		generateResponse: responseService
+			? (input) => {
+					return responseService.generateReply(input);
+				}
+			: undefined,
+		isResponseError,
 		appendSttLog,
 		playAudio,
 		speak,
 	});
+}
+
+function resolveResponseService(env: NodeJS.ProcessEnv) {
+	try {
+		return createResponseService({ env });
+	} catch (err) {
+		if (isResponseError(err)) {
+			sttTurnLogger.error(`LLM response disabled (${err.code}): ${err.message}`);
+		} else {
+			sttTurnLogger.error("Failed to initialize LLM response service:", err);
+		}
+		return null;
+	}
+}
+
+function isResponseError(err: unknown): err is ResponseErrorLike {
+	return (
+		typeof err === "object" &&
+		err !== null &&
+		"code" in err &&
+		typeof (err as { code: unknown }).code === "string" &&
+		"message" in err &&
+		typeof (err as { message: unknown }).message === "string"
+	);
 }
 
 interface StartupTriggerRuntimeConfig {

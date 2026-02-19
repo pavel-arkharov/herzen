@@ -47,9 +47,17 @@ At the moment, the system supports:
 - adaptive recording via `@herzen/vad`-backed endpointing (speech start/stop thresholds, silence window, max cap, no-speech timeout)
 - stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override
 - local text-to-speech via macOS `say`
-- initial `@herzen/response` scaffolding for local LLM-backed reply generation (Ollama provider boundary, integration pending)
+- local LLM-backed reply generation via `@herzen/response` (Ollama provider, text-in/text-out)
 
 Wakeword mode now runs through the external `herzen-wake` daemon and can trigger full turns in `@herzen/core`.
+
+---
+
+## Beginner setup
+
+For a non-technical, step-by-step local setup guide, use:
+
+- `/Users/parkharo/Programming/herzen/runbook.md`
 
 ---
 
@@ -69,6 +77,12 @@ Wakeword mode dependency:
 - local `herzen-wake` daemon running in a separate terminal:
   - repo: [`pavel-arkharov/herzen-wake`](https://github.com/pavel-arkharov/herzen-wake)
   - transport: Unix socket (`HERZEN_WAKEWORD_SOCKET`, default under `data/run/wakeword.sock`)
+
+LLM response dependency:
+
+- local Ollama runtime (`ollama serve`) for `@herzen/response`
+- model selection via `HERZEN_OLLAMA_MODEL` (required)
+- optional endpoint override via `HERZEN_OLLAMA_BASE_URL` (loopback-only by default)
 
 ---
 
@@ -144,6 +158,11 @@ Supported input formats:
   - `pnpm --filter @herzen/vad test`
 
 Current baseline is focused unit coverage for trigger handling, STT/core turn orchestration, adaptive VAD recording behavior, file-transcription CLI/document generation, and package command-wrapper behavior.
+
+## Development Notes
+
+- `pnpm dev` and `pnpm -C packages/core dev:watch` currently build `@herzen/response` once at startup.
+- When editing files under `packages/response/src`, rerun `pnpm --filter @herzen/response build` and restart the core dev process.
 
 ---
 

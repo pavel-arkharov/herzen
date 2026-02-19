@@ -11,6 +11,11 @@ const DEFAULT_VAD_END_THRESHOLD = 0.35;
 const DEFAULT_VAD_FRAME_SAMPLES = 512;
 
 const FALLBACK_SPEECH = "[en] I couldn't understand that.";
+const RESPONSE_FALLBACK_SPEECH_EN = "[en] I heard you, but I can't respond right now.";
+const RESPONSE_FALLBACK_SPEECH_RU = "[ru] Я вас услышал, но сейчас не могу ответить.";
+const FALLBACK_RESPONSE_ERROR_CODE = "RESPONSE_UNAVAILABLE";
+
+type RequestedResponseLanguage = "auto" | "en" | "ru";
 
 export interface SttLogEntry {
 	timestamp: string;
@@ -21,6 +26,11 @@ export interface SttLogEntry {
 	language?: string;
 	transcript?: string;
 	errorCode?: string;
+	llmProvider?: string;
+	llmModel?: string;
+	llmLatencyMs?: number;
+	llmOutcome?: "ok" | "error";
+	llmErrorCode?: string;
 }
 
 export interface SttResultLike {
@@ -30,6 +40,26 @@ export interface SttResultLike {
 }
 
 export interface SttErrorLike {
+	code: string;
+	message: string;
+}
+
+export interface ResponseInputLike {
+	transcript: string;
+	detectedLanguage?: string;
+	requestedLanguage?: RequestedResponseLanguage;
+	timestampIso: string;
+}
+
+export interface ResponseOutputLike {
+	text: string;
+	language: "en" | "ru";
+	provider: string;
+	model: string;
+	durationMs: number;
+}
+
+export interface ResponseErrorLike {
 	code: string;
 	message: string;
 }
@@ -53,6 +83,8 @@ export interface TriggerTurnDependencies {
 	) => Promise<AdaptiveRecordResultLike>;
 	transcribeWav: (file: string) => Promise<SttResultLike>;
 	isSttError: (err: unknown) => err is SttErrorLike;
+	generateResponse?: (input: ResponseInputLike) => Promise<ResponseOutputLike>;
+	isResponseError?: (err: unknown) => err is ResponseErrorLike;
 	appendSttLog: (entry: SttLogEntry) => Promise<void>;
 	playAudio: (file: string) => Promise<void>;
 	speak: (text: string) => Promise<void>;
@@ -77,17 +109,24 @@ export function createSttTriggerHandler(deps: TriggerTurnDependencies): () => Pr
 	return async () => {
 		const env = deps.getEnv();
 		const file = join(deps.outDir, `test-${deps.now()}.wav`);
-			const languageMode = resolveSttLanguageMode(env.HERZEN_STT_LANGUAGE);
-			const recordSeconds = resolveRecordSeconds(env.HERZEN_RECORD_SECONDS, deps.logger);
-			const playbackEnabled = resolvePlaybackEnabled(env.HERZEN_PLAYBACK);
+		const languageMode = resolveSttLanguageMode(env.HERZEN_STT_LANGUAGE);
+		const requestedLanguage = resolveRequestedResponseLanguage(languageMode);
+		const recordSeconds = resolveRecordSeconds(env.HERZEN_RECORD_SECONDS, deps.logger);
+		const playbackEnabled = resolvePlaybackEnabled(env.HERZEN_PLAYBACK);
 
-			await recordTurnAudio(deps, file, env, recordSeconds);
+		await recordTurnAudio(deps, file, env, recordSeconds);
 
-			let latencyMs: number;
+		let latencyMs: number;
 		let durationMs: number;
 		let transcript = "";
 		let language = "auto";
 		let errorCode: string | undefined;
+		let llmProvider: string | undefined;
+		let llmModel: string | undefined;
+		let llmLatencyMs: number | undefined;
+		let llmOutcome: "ok" | "error" | undefined;
+		let llmErrorCode: string | undefined;
+		let speechText = FALLBACK_SPEECH;
 		const sttStart = deps.now();
 
 		try {
@@ -114,6 +153,45 @@ export function createSttTriggerHandler(deps: TriggerTurnDependencies): () => Pr
 			}
 		}
 
+		if (transcript) {
+			if (deps.generateResponse) {
+				const responseStartedAt = deps.now();
+				try {
+					const response = await deps.generateResponse({
+						transcript,
+						detectedLanguage: language,
+						requestedLanguage,
+						timestampIso: deps.nowIso(),
+					});
+					const responseText = response.text.trim();
+					if (!responseText) {
+						throw createOutputInvalidResponseError();
+					}
+
+					speechText = responseText;
+					llmProvider = response.provider;
+					llmModel = response.model;
+					llmLatencyMs = response.durationMs;
+					llmOutcome = "ok";
+				} catch (err) {
+					llmLatencyMs = deps.now() - responseStartedAt;
+					llmOutcome = "error";
+					llmErrorCode = resolveResponseErrorCode(err, deps.isResponseError);
+					speechText = responseUnavailableSpeech(transcript, language);
+					if (isResponseError(err, deps.isResponseError)) {
+						deps.logger.error(`LLM response error (${err.code}): ${err.message}`);
+					} else {
+						deps.logger.error("LLM response error:", err);
+					}
+				}
+			} else {
+				llmOutcome = "error";
+				llmErrorCode = FALLBACK_RESPONSE_ERROR_CODE;
+				speechText = responseUnavailableSpeech(transcript, language);
+				deps.logger.error("LLM response service unavailable.");
+			}
+		}
+
 		try {
 			await deps.appendSttLog({
 				timestamp: deps.nowIso(),
@@ -124,6 +202,11 @@ export function createSttTriggerHandler(deps: TriggerTurnDependencies): () => Pr
 				language,
 				transcript: transcript || undefined,
 				errorCode,
+				llmProvider,
+				llmModel,
+				llmLatencyMs,
+				llmOutcome,
+				llmErrorCode,
 			});
 		} catch (err) {
 			deps.logger.error("Failed to write STT log:", err);
@@ -136,14 +219,46 @@ export function createSttTriggerHandler(deps: TriggerTurnDependencies): () => Pr
 			deps.logger.log("Playback skipped. Set HERZEN_PLAYBACK=1 to enable.");
 		}
 
-		if (transcript) {
-			await deps.speak(confirmationSpeech(transcript, language));
-		} else {
-			await deps.speak(FALLBACK_SPEECH);
-		}
+		await deps.speak(speechText);
 
 		deps.logger.log("Done:", file);
 	};
+}
+
+function resolveRequestedResponseLanguage(languageMode: string): RequestedResponseLanguage {
+	const normalized = languageMode.trim().toLowerCase();
+	if (normalized === "en" || normalized === "ru") return normalized;
+	return "auto";
+}
+
+function createOutputInvalidResponseError(): ResponseErrorLike {
+	return {
+		code: "OUTPUT_INVALID",
+		message: "LLM returned an empty response.",
+	};
+}
+
+function resolveResponseErrorCode(
+	err: unknown,
+	isResponseErrorGuard: TriggerTurnDependencies["isResponseError"],
+): string {
+	if (isResponseError(err, isResponseErrorGuard)) return err.code;
+	return "UNKNOWN";
+}
+
+function isResponseError(
+	err: unknown,
+	isResponseErrorGuard: TriggerTurnDependencies["isResponseError"],
+): err is ResponseErrorLike {
+	if (isResponseErrorGuard?.(err)) return true;
+	return (
+		typeof err === "object" &&
+		err !== null &&
+		"code" in err &&
+		typeof (err as { code: unknown }).code === "string" &&
+		"message" in err &&
+		typeof (err as { message: unknown }).message === "string"
+	);
 }
 
 function resolveSttLanguageMode(rawLanguage: string | undefined): string {
@@ -308,11 +423,9 @@ function hasCyrillic(text: string): boolean {
 	return /[А-Яа-яЁё]/.test(text);
 }
 
-function confirmationSpeech(transcript: string, language: string): string {
-	if (language === "ru" || hasCyrillic(transcript)) {
-		return `[ru] Я услышал: ${transcript}`;
-	}
-	return `[en] I heard: ${transcript}`;
+function responseUnavailableSpeech(transcript: string, language: string): string {
+	if (detectedLanguageLabel(transcript, language) === "ru") return RESPONSE_FALLBACK_SPEECH_RU;
+	return RESPONSE_FALLBACK_SPEECH_EN;
 }
 
 function detectedLanguageLabel(transcript: string, language: string): "en" | "ru" {

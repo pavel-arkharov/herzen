@@ -80,10 +80,10 @@ When triggered, the core currently:
   - invalid adaptive config falls back to fixed recording for that turn
   - adaptive runtime failures also fall back to fixed recording for that turn
 - runs local STT via `@herzen/stt` (`transcribeWav`)
-- has response-layer scaffolding via `@herzen/response` for future local LLM replies
+- generates local LLM replies via `@herzen/response` (Ollama provider)
 - appends one structured STT event per trigger to `data/logs/stt.jsonl`
 - optionally plays the recorded file when `HERZEN_PLAYBACK=1`
-- speaks transcript-aware confirmation when transcription succeeds, else a short fallback
+- speaks model-generated reply text when available, else a short fallback
 
 Outside the live trigger loop, the repository also provides per-file transcription:
 - `pnpm transcribe:file -- "<audio-file>"`
@@ -129,8 +129,8 @@ The system must remain usable even if the entire repository is copied to a new m
 Seven packages are currently implemented: **audio**, **core**, **stt**, **tts**, **vad**, **wakeword**, and **response**.
 
 Notes:
-- `@herzen/response` is currently scaffolding only (provider boundary + config validation)
-- LLM generation is not wired into the core turn path yet
+- `@herzen/response` currently supports local Ollama-backed MVP replies
+- advanced response features (tools/memory/streaming) are intentionally deferred
 
 More will be added later without breaking these.
 

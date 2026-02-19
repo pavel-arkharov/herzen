@@ -4,6 +4,7 @@ General documents live at the docs root. Topic-specific docs are grouped in subf
 
 ## General
 
+- /Users/parkharo/Programming/herzen/runbook.md
 - /Users/parkharo/Programming/herzen/docs/design_principles.md
 
 ## Architecture

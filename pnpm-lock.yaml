@@ -44,6 +44,9 @@ importers:
       '@herzen/audio':
         specifier: workspace:*
         version: link:../audio
+      '@herzen/response':
+        specifier: workspace:*
+        version: link:../response
       '@herzen/stt':
         specifier: workspace:*
         version: link:../stt
@@ -53,6 +56,8 @@ importers:
       '@herzen/wakeword':
         specifier: workspace:*
         version: link:../wakeword
+
+  packages/response: {}
 
   packages/stt: {}
 

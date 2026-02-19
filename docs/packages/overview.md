@@ -98,7 +98,7 @@ Current behavior (prototype):
 - falls back to fixed recording for the current turn when adaptive runtime fails
 - runs local STT transcription and logs per-turn telemetry (latency, duration, language mode, detected language, optional error code)
 - plays the recording only when `HERZEN_PLAYBACK=1`
-- speaks transcript-aware confirmation or a fallback message
+- speaks model-generated reply text via `@herzen/response` or a fallback message
 
 ---
 
@@ -244,9 +244,9 @@ This package is responsible for:
 
 Current status:
 
-- scaffolding is implemented
-- provider contract is defined
-- Ollama provider entrypoint is wired but generation call is intentionally unimplemented in this stage
+- provider contract is implemented
+- Ollama provider is implemented (`POST /api/chat`, non-streaming)
+- core STT-success path consumes `@herzen/response` and speaks model reply text
 
 Current planned provider:
 

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSttTriggerHandler, type SttErrorLike, type SttLogEntry } from "../src/turn.js";
+import {
+	createSttTriggerHandler,
+	type ResponseErrorLike,
+	type SttErrorLike,
+	type SttLogEntry,
+} from "../src/turn.js";
 
 function createNowMock(sequence: number[]) {
 	let idx = 0;
@@ -17,6 +22,19 @@ function createDeps(overrides?: {
 	transcribeImpl?: (file: string) => Promise<{ text: string; language: string; durationMs: number }>;
 	recordAdaptiveImpl?: (file: string, config: unknown) => Promise<{ durationSeconds: number; stopReason: string }>;
 	isSttError?: (err: unknown) => err is SttErrorLike;
+	generateResponseImpl?: (input: {
+		transcript: string;
+		detectedLanguage?: string;
+		requestedLanguage?: "auto" | "en" | "ru";
+		timestampIso: string;
+	}) => Promise<{
+		text: string;
+		language: "en" | "ru";
+		provider: string;
+		model: string;
+		durationMs: number;
+	}>;
+	isResponseError?: (err: unknown) => err is ResponseErrorLike;
 }) {
 	const logger = {
 		log: vi.fn(),
@@ -42,6 +60,19 @@ function createDeps(overrides?: {
 		overrides?.isSttError ??
 		((err: unknown): err is SttErrorLike =>
 			typeof err === "object" && err !== null && "code" in err && "message" in err);
+	const generateResponse =
+		overrides?.generateResponseImpl ??
+		vi.fn(async () => ({
+			text: "Model reply",
+			language: "en" as const,
+			provider: "ollama",
+			model: "qwen2.5:3b",
+			durationMs: 210,
+		}));
+	const isResponseError =
+		overrides?.isResponseError ??
+		((err: unknown): err is ResponseErrorLike =>
+			typeof err === "object" && err !== null && "code" in err && "message" in err);
 
 	const deps = {
 		outDir: "/tmp/audio",
@@ -54,6 +85,8 @@ function createDeps(overrides?: {
 		recordAudioAdaptive,
 		transcribeWav,
 		isSttError,
+		generateResponse,
+		isResponseError,
 		appendSttLog,
 		playAudio,
 		speak,
@@ -68,12 +101,13 @@ function createDeps(overrides?: {
 		recordAudioAdaptive,
 		playAudio,
 		speak,
+		generateResponse,
 	};
 }
 
 describe("createSttTriggerHandler", () => {
-	it("handles successful STT result and uses confirmation speech", async () => {
-		const { deps, logger, appendSttLog, recordAudioFixed, playAudio, speak } = createDeps({
+	it("handles successful STT result and speaks model reply", async () => {
+		const { deps, logger, appendSttLog, recordAudioFixed, playAudio, speak, generateResponse } = createDeps({
 			env: {
 				HERZEN_STT_LANGUAGE: "en",
 				HERZEN_RECORD_SECONDS: "5",
@@ -91,7 +125,13 @@ describe("createSttTriggerHandler", () => {
 
 		expect(recordAudioFixed).toHaveBeenCalledWith("/tmp/audio/test-1000.wav", 5);
 		expect(playAudio).toHaveBeenCalledWith("/tmp/audio/test-1000.wav");
-		expect(speak).toHaveBeenCalledWith("[en] I heard: hello world");
+		expect(generateResponse).toHaveBeenCalledWith({
+			transcript: "hello world",
+			detectedLanguage: "en",
+			requestedLanguage: "en",
+			timestampIso: "2026-02-14T00:00:00.000Z",
+		});
+		expect(speak).toHaveBeenCalledWith("Model reply");
 		expect(logger.log).toHaveBeenCalledWith("[en detected]");
 		expect(appendSttLog).toHaveBeenCalledWith({
 			timestamp: "2026-02-14T00:00:00.000Z",
@@ -102,7 +142,62 @@ describe("createSttTriggerHandler", () => {
 			language: "en",
 			transcript: "hello world",
 			errorCode: undefined,
+			llmProvider: "ollama",
+			llmModel: "qwen2.5:3b",
+			llmLatencyMs: 210,
+			llmOutcome: "ok",
+			llmErrorCode: undefined,
 		});
+	});
+
+	it("uses fallback speech when response generation fails", async () => {
+		const responseErr = { code: "RUNTIME_UNAVAILABLE", message: "Ollama unavailable" };
+		const { deps, logger, appendSttLog, speak } = createDeps({
+			nowSequence: [2_000, 2_100, 2_400, 2_700],
+			transcribeImpl: async () => ({
+				text: "hello world",
+				language: "en",
+				durationMs: 123,
+			}),
+			generateResponseImpl: async () => {
+				throw responseErr;
+			},
+			isResponseError: (err: unknown): err is ResponseErrorLike => err === responseErr,
+		});
+
+		const handleTrigger = createSttTriggerHandler(deps);
+		await handleTrigger();
+
+		expect(logger.error).toHaveBeenCalledWith("LLM response error (RUNTIME_UNAVAILABLE): Ollama unavailable");
+		expect(speak).toHaveBeenCalledWith("[en] I heard you, but I can't respond right now.");
+		expect(appendSttLog).toHaveBeenCalledWith(
+			expect.objectContaining({
+				llmOutcome: "error",
+				llmErrorCode: "RUNTIME_UNAVAILABLE",
+				llmLatencyMs: 300,
+			}),
+		);
+	});
+
+	it("uses russian response fallback when transcript language is russian", async () => {
+		const responseErr = { code: "RUNTIME_UNAVAILABLE", message: "Ollama unavailable" };
+		const { deps, speak } = createDeps({
+			nowSequence: [2_000, 2_100, 2_400, 2_700],
+			transcribeImpl: async () => ({
+				text: "Привет",
+				language: "ru",
+				durationMs: 123,
+			}),
+			generateResponseImpl: async () => {
+				throw responseErr;
+			},
+			isResponseError: (err: unknown): err is ResponseErrorLike => err === responseErr,
+		});
+
+		const handleTrigger = createSttTriggerHandler(deps);
+		await handleTrigger();
+
+		expect(speak).toHaveBeenCalledWith("[ru] Я вас услышал, но сейчас не могу ответить.");
 	});
 
 	it("uses fallback speech when transcript is empty", async () => {
@@ -125,6 +220,7 @@ describe("createSttTriggerHandler", () => {
 				transcript: undefined,
 				errorCode: undefined,
 				language: "en",
+				llmOutcome: undefined,
 			}),
 		);
 	});

@@ -108,6 +108,7 @@ export function toStructuredSttTurnEntry(
 	entry: SttLogEntry,
 	options: { transcriptEnabled: boolean },
 ): StructuredLogEntry {
+	const isErrorLevel = Boolean(entry.errorCode) || entry.llmOutcome === "error";
 	const fields: Record<string, unknown> = {
 		audioFile: entry.audioFile,
 		latencyMs: entry.latencyMs,
@@ -117,11 +118,16 @@ export function toStructuredSttTurnEntry(
 
 	if (entry.language) fields.detectedLanguage = entry.language;
 	if (entry.errorCode) fields.errorCode = entry.errorCode;
+	if (entry.llmProvider) fields.llmProvider = entry.llmProvider;
+	if (entry.llmModel) fields.llmModel = entry.llmModel;
+	if (typeof entry.llmLatencyMs === "number") fields.llmLatencyMs = entry.llmLatencyMs;
+	if (entry.llmOutcome) fields.llmOutcome = entry.llmOutcome;
+	if (entry.llmErrorCode) fields.llmErrorCode = entry.llmErrorCode;
 	if (options.transcriptEnabled && entry.transcript) fields.transcript = entry.transcript;
 
 	return {
 		ts: entry.timestamp,
-		level: entry.errorCode ? "error" : "info",
+		level: isErrorLevel ? "error" : "info",
 		component: "stt",
 		event: "stt.turn",
 		fields,

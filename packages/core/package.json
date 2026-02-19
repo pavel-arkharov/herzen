@@ -5,9 +5,9 @@
 	"main": "dist/index.js",
 	"scripts": {
 		"build": "tsc -p tsconfig.json",
-		"dev": "tsx src/index.ts",
-		"dev:watch": "tsx watch src/index.ts",
-		"start": "node --enable-source-maps dist/index.js",
+		"dev": "pnpm --filter @herzen/response build && tsx src/index.ts",
+		"dev:watch": "pnpm --filter @herzen/response build && tsx watch src/index.ts",
+		"start": "pnpm --filter @herzen/response build && node --enable-source-maps dist/index.js",
 		"lint": "eslint . --format json",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"test": "vitest run tests",
@@ -16,6 +16,7 @@
 	},
 	"dependencies": {
 		"@herzen/audio": "workspace:*",
+		"@herzen/response": "workspace:*",
 		"@herzen/stt": "workspace:*",
 		"@herzen/tts": "workspace:*",
 		"@herzen/wakeword": "workspace:*"
