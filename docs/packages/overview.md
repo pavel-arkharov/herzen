@@ -2,7 +2,7 @@
 
 This document lists the current packages in the Herzen monorepo.
 
-**core**, **audio**, **stt**, **tts**, **vad**, and **wakeword** are currently implemented.
+**core**, **audio**, **stt**, **tts**, **vad**, **wakeword**, and **response** are currently implemented.
 Other packages (integrations) will be added later.
 
 ---
@@ -56,8 +56,8 @@ This package:
 - runs the main control loop
 - coordinates audio recording and playback
 - orchestrates STT via `@herzen/stt`
+- routes trigger events from `stdin` or wakeword source
 - will eventually host:
-  - wake word routing
   - intent resolution
   - tool calling
   - memory access
@@ -71,7 +71,7 @@ Current behavior (prototype):
 - uses a trigger abstraction boundary (`core/src/trigger/*`)
 - defaults to `stdin` trigger mode (manual Enter key)
 - supports mode selection through `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`)
-- includes a `wakeword` trigger adapter backed by `@herzen/wakeword` (still in-progress for next stretch)
+- includes a `wakeword` trigger adapter backed by `@herzen/wakeword`
 - supports recording mode selection (`fixed` / `adaptive`) during interactive startup
 - when adaptive mode is selected interactively, prompts for adaptive max length for the current run
 - uses typed trigger-domain errors for control flow (`SOURCE_CLOSED`, `SOURCE_FAILED`)
@@ -225,6 +225,48 @@ Current error model:
 
 Shared protocol contract:
 - `docs/architecture/wakeword_sidecar_contract.md`
+
+Daemon repository:
+- <https://github.com/pavel-arkharov/herzen-wake>
+
+---
+
+## @herzen/response
+
+**Purpose**  
+Local assistant reply generation boundary (text-in, text-out).
+
+This package is responsible for:
+
+- validating response-runtime configuration
+- exposing a stable response-service interface for core orchestration
+- defining provider boundary types for local LLM integrations
+
+Current status:
+
+- scaffolding is implemented
+- provider contract is defined
+- Ollama provider entrypoint is wired but generation call is intentionally unimplemented in this stage
+
+Current planned provider:
+
+- `ollama` (local HTTP runtime)
+
+Current environment surface:
+
+- `HERZEN_RESPONSE_PROVIDER` (default `ollama`)
+- `HERZEN_OLLAMA_BASE_URL` (default `http://127.0.0.1:11434`)
+- `HERZEN_OLLAMA_MODEL` (required)
+- `HERZEN_RESPONSE_TIMEOUT_MS` (default `12000`)
+- `HERZEN_RESPONSE_TEMPERATURE` (default `0.2`)
+- `HERZEN_ALLOW_REMOTE_LLM` (optional override, default local-only)
+
+Current error model:
+
+- `CONFIG_INVALID`
+- `RUNTIME_UNAVAILABLE`
+- `GENERATION_FAILED`
+- `OUTPUT_INVALID`
 
 ---
 

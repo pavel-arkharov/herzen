@@ -41,14 +41,15 @@ At the moment, the system supports:
 - per-file audio-to-text transcription via `pnpm transcribe:file` (txt or markdown output)
 - a trigger source boundary with `stdin` mode by default (`Enter` trigger)
 - selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`) plus interactive startup prompt
-- wakeword sidecar integration via `@herzen/wakeword` (Unix socket JSONL client for `herzen-wake`), with trigger path still in-progress for the next working stretch
+- wakeword sidecar integration via `@herzen/wakeword` (Unix socket JSONL client for [`herzen-wake`](https://github.com/pavel-arkharov/herzen-wake))
 - recording mode selection at startup (`fixed` or `adaptive`)
 - fixed recording via `HERZEN_RECORD_SECONDS` (default `3`)
 - adaptive recording via `@herzen/vad`-backed endpointing (speech start/stop thresholds, silence window, max cap, no-speech timeout)
 - stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override
 - local text-to-speech via macOS `say`
+- initial `@herzen/response` scaffolding for local LLM-backed reply generation (Ollama provider boundary, integration pending)
 
-Wakeword daemon/client contracts are in place, but reliable wakeword-triggered turns are still treated as next-stretch implementation work.
+Wakeword mode now runs through the external `herzen-wake` daemon and can trigger full turns in `@herzen/core`.
 
 ---
 
@@ -63,6 +64,12 @@ Wakeword daemon/client contracts are in place, but reliable wakeword-triggered t
   - override: `HERZEN_VAD_MODEL`
 - optional for `.m4a` file transcription: `ffmpeg` (preferred) or `afconvert` (macOS fallback)
 
+Wakeword mode dependency:
+
+- local `herzen-wake` daemon running in a separate terminal:
+  - repo: [`pavel-arkharov/herzen-wake`](https://github.com/pavel-arkharov/herzen-wake)
+  - transport: Unix socket (`HERZEN_WAKEWORD_SOCKET`, default under `data/run/wakeword.sock`)
+
 ---
 
 ## Monorepo structure (overview)
@@ -76,6 +83,7 @@ packages/
   tts/ # text-to-speech utilities
   vad/ # voice activity detection (Silero VAD wrapper)
   wakeword/ # wakeword sidecar client utilities
+  response/ # local LLM response generation boundary (scaffold)
 data/ # local-only runtime data (gitignored)
   audio/
   logs/
@@ -83,7 +91,7 @@ data/ # local-only runtime data (gitignored)
 docs/ # architecture, packages, and design notes
 ```
 
-Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`, `packages/vad`, `packages/wakeword`.
+Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`, `packages/vad`, `packages/wakeword`, `packages/response`.
 
 ---
 
@@ -132,6 +140,7 @@ Supported input formats:
   - `pnpm test:stt`
   - `pnpm test:tts`
   - `pnpm test:wakeword`
+  - `pnpm test:response`
   - `pnpm --filter @herzen/vad test`
 
 Current baseline is focused unit coverage for trigger handling, STT/core turn orchestration, adaptive VAD recording behavior, file-transcription CLI/document generation, and package command-wrapper behavior.

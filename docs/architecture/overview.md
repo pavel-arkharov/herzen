@@ -39,7 +39,7 @@ Trigger detection is now isolated behind a `TriggerSource` interface in
 
 Current trigger source modes:
 - `stdin` (default): manual Enter key trigger
-- `wakeword`: sidecar-backed trigger via `@herzen/wakeword` (currently in-progress for next stretch)
+- `wakeword`: sidecar-backed trigger via `@herzen/wakeword`
 
 Recording mode is selected separately at startup in interactive sessions:
 - `fixed`
@@ -58,8 +58,9 @@ Wakeword implementation direction:
 - no service-account dependency for wakeword detection
 
 Current status:
-- wakeword client and protocol wiring exist
-- dependable wakeword-triggered runtime flow is still an in-progress item for the next working stretch
+- wakeword sidecar contract is implemented in `@herzen/wakeword` + `@herzen/core`
+- wakeword-triggered turns are available when the daemon is running
+- daemon repository: <https://github.com/pavel-arkharov/herzen-wake>
 
 Shared contract for both repos:
 - [wakeword_sidecar_contract.md](./wakeword_sidecar_contract.md)
@@ -79,6 +80,7 @@ When triggered, the core currently:
   - invalid adaptive config falls back to fixed recording for that turn
   - adaptive runtime failures also fall back to fixed recording for that turn
 - runs local STT via `@herzen/stt` (`transcribeWav`)
+- has response-layer scaffolding via `@herzen/response` for future local LLM replies
 - appends one structured STT event per trigger to `data/logs/stt.jsonl`
 - optionally plays the recorded file when `HERZEN_PLAYBACK=1`
 - speaks transcript-aware confirmation when transcription succeeds, else a short fallback
@@ -124,7 +126,11 @@ The system must remain usable even if the entire repository is copied to a new m
 
 ## Current packages
 
-Six packages are currently implemented: **audio**, **core**, **stt**, **tts**, **vad**, and **wakeword**.
+Seven packages are currently implemented: **audio**, **core**, **stt**, **tts**, **vad**, **wakeword**, and **response**.
+
+Notes:
+- `@herzen/response` is currently scaffolding only (provider boundary + config validation)
+- LLM generation is not wired into the core turn path yet
 
 More will be added later without breaking these.
 

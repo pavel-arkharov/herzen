@@ -12,6 +12,7 @@ Current test scope is unit tests for the monorepo packages:
 - `/Users/parkharo/Programming/herzen/packages/tts`
 - `/Users/parkharo/Programming/herzen/packages/vad`
 - `/Users/parkharo/Programming/herzen/packages/wakeword`
+- `/Users/parkharo/Programming/herzen/packages/response`
 
 Primary goals:
 
@@ -38,6 +39,7 @@ Tests live in `tests/` folders inside each package:
 - `/Users/parkharo/Programming/herzen/packages/tts/tests`
 - `/Users/parkharo/Programming/herzen/packages/vad/tests`
 - `/Users/parkharo/Programming/herzen/packages/wakeword/tests`
+- `/Users/parkharo/Programming/herzen/packages/response/tests`
 
 Naming convention:
 
@@ -69,6 +71,7 @@ pnpm test:audio
 pnpm test:stt
 pnpm test:tts
 pnpm test:wakeword
+pnpm test:response
 pnpm --filter @herzen/vad test
 
 # quality gates used alongside tests
@@ -84,6 +87,7 @@ Optional package-local execution (from package directory):
 - `/Users/parkharo/Programming/herzen/packages/tts`: `pnpm test`
 - `/Users/parkharo/Programming/herzen/packages/vad`: `pnpm test`
 - `/Users/parkharo/Programming/herzen/packages/wakeword`: `pnpm test`
+- `/Users/parkharo/Programming/herzen/packages/response`: `pnpm test`
 
 ## Test design guidance
 
@@ -121,6 +125,7 @@ Optional package-local execution (from package directory):
 - VAD model-path/runtime config validation and session probability semantics
 - VAD ONNX engine behavior for recurrent state inputs/outputs (`h`, `c`, `hn`, `cn`)
 - Wakeword socket client lifecycle, protocol parsing, and error semantics
+- Response package config validation and provider-boundary scaffold behavior
 
 ## Known gaps
 

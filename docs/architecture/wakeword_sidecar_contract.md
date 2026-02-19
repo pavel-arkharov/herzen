@@ -4,6 +4,7 @@ This document is the shared source of truth for wakeword integration between:
 
 - `herzen` (main monorepo, Node/TypeScript)
 - `herzen-wake` (separate daemon repo, Python/openWakeWord)
+  - public repo: <https://github.com/pavel-arkharov/herzen-wake>
 
 Goal: keep both repos implementable by separate agents without hidden assumptions.
 
