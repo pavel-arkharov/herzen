@@ -49,6 +49,56 @@ Local-only policy:
 
 ---
 
+## Ollama Setup (MVP)
+
+Recommended default model for this repo:
+
+- `qwen2.5:3b`
+
+Install Ollama (macOS/Homebrew):
+
+```bash
+brew install ollama
+```
+
+Verify CLI:
+
+```bash
+ollama --version
+```
+
+Pull model once:
+
+```bash
+ollama pull qwen2.5:3b
+```
+
+Quick runtime check:
+
+```bash
+ollama run qwen2.5:3b "Say hello"
+```
+
+Monitor loaded model/process status:
+
+```bash
+ollama ps
+```
+
+Run Herzen with response package enabled:
+
+```bash
+HERZEN_OLLAMA_MODEL=qwen2.5:3b pnpm dev
+```
+
+If local model warm-up is slow on first requests, increase timeout:
+
+```bash
+HERZEN_OLLAMA_MODEL=qwen2.5:3b HERZEN_RESPONSE_TIMEOUT_MS=60000 pnpm dev
+```
+
+---
+
 ## Public API (Scaffold)
 
 - `createResponseService(options?)`
