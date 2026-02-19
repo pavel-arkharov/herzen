@@ -41,6 +41,10 @@ Current trigger source modes:
 - `stdin` (default): manual Enter key trigger
 - `wakeword`: sidecar-backed trigger via `@herzen/wakeword` (currently in-progress for next stretch)
 
+Recording mode is selected separately at startup in interactive sessions:
+- `fixed`
+- `adaptive` (VAD-based endpointing)
+
 The core orchestration loop consumes `TriggerSource` events and does not
 directly wire terminal input semantics.
 Trigger boundary failures are surfaced as typed trigger-domain errors
@@ -62,7 +66,18 @@ Shared contract for both repos:
 
 When triggered, the core currently:
 - emits a short beep
-- records audio into `data/audio` for fixed duration (`HERZEN_RECORD_SECONDS`, default `3`)
+- records audio into `data/audio` using selected recording mode:
+  - fixed: `HERZEN_RECORD_SECONDS` (default `3`)
+  - adaptive: VAD-based endpointing via `@herzen/audio` + `@herzen/vad`
+    - min duration `HERZEN_RECORD_MIN_SECONDS` (default `1`)
+    - max duration `HERZEN_RECORD_MAX_SECONDS` (default `12`)
+    - trailing silence window `HERZEN_RECORD_SILENCE_SECONDS` (default `0.7`)
+    - no-speech timeout `HERZEN_RECORD_NO_SPEECH_TIMEOUT_SECONDS` (default `4`)
+    - start threshold `HERZEN_VAD_START_THRESHOLD` (default `0.55`)
+    - end threshold `HERZEN_VAD_END_THRESHOLD` (default `0.35`)
+    - frame samples `HERZEN_VAD_FRAME_SAMPLES` (default `512`)
+  - invalid adaptive config falls back to fixed recording for that turn
+  - adaptive runtime failures also fall back to fixed recording for that turn
 - runs local STT via `@herzen/stt` (`transcribeWav`)
 - appends one structured STT event per trigger to `data/logs/stt.jsonl`
 - optionally plays the recorded file when `HERZEN_PLAYBACK=1`
@@ -109,7 +124,7 @@ The system must remain usable even if the entire repository is copied to a new m
 
 ## Current packages
 
-Five packages are currently implemented: **audio**, **core**, **stt**, **tts**, and **wakeword**.
+Six packages are currently implemented: **audio**, **core**, **stt**, **tts**, **vad**, and **wakeword**.
 
 More will be added later without breaking these.
 

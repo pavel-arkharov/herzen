@@ -42,7 +42,9 @@ At the moment, the system supports:
 - a trigger source boundary with `stdin` mode by default (`Enter` trigger)
 - selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`) plus interactive startup prompt
 - wakeword sidecar integration via `@herzen/wakeword` (Unix socket JSONL client for `herzen-wake`), with trigger path still in-progress for the next working stretch
-- fixed-length recording via `HERZEN_RECORD_SECONDS` (default `3`)
+- recording mode selection at startup (`fixed` or `adaptive`)
+- fixed recording via `HERZEN_RECORD_SECONDS` (default `3`)
+- adaptive recording via `@herzen/vad`-backed endpointing (speech start/stop thresholds, silence window, max cap, no-speech timeout)
 - stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override
 - local text-to-speech via macOS `say`
 
@@ -56,6 +58,9 @@ Wakeword daemon/client contracts are in place, but reliable wakeword-triggered t
 - macOS `say` for text-to-speech
 - whisper.cpp CLI (`whisper-cli` on PATH or `HERZEN_WHISPER_BIN`) for STT transcription
 - local whisper model file path via `HERZEN_WHISPER_MODEL` for STT transcription
+- Silero VAD model file for adaptive recording:
+  - default path: `data/models/silero_vad.onnx`
+  - override: `HERZEN_VAD_MODEL`
 - optional for `.m4a` file transcription: `ffmpeg` (preferred) or `afconvert` (macOS fallback)
 
 ---
@@ -69,6 +74,7 @@ packages/
   audio/ # audio input/output utilities
   stt/ # speech-to-text utilities
   tts/ # text-to-speech utilities
+  vad/ # voice activity detection (Silero VAD wrapper)
   wakeword/ # wakeword sidecar client utilities
 data/ # local-only runtime data (gitignored)
   audio/
@@ -77,7 +83,7 @@ data/ # local-only runtime data (gitignored)
 docs/ # architecture, packages, and design notes
 ```
 
-Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`, `packages/wakeword`.
+Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`, `packages/vad`, `packages/wakeword`.
 
 ---
 
@@ -126,8 +132,9 @@ Supported input formats:
   - `pnpm test:stt`
   - `pnpm test:tts`
   - `pnpm test:wakeword`
+  - `pnpm --filter @herzen/vad test`
 
-Current baseline is focused unit coverage for trigger handling, STT/core turn orchestration, file-transcription CLI/document generation, and package command-wrapper behavior.
+Current baseline is focused unit coverage for trigger handling, STT/core turn orchestration, adaptive VAD recording behavior, file-transcription CLI/document generation, and package command-wrapper behavior.
 
 ---
 

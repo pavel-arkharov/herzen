@@ -1,5 +1,5 @@
 {
-	"name": "@herzen/audio",
+	"name": "@herzen/vad",
 	"version": "0.0.1",
 	"type": "module",
 	"main": "dist/index.js",
@@ -9,7 +9,6 @@
 	},
 	"scripts": {
 		"build": "tsc -p tsconfig.json",
-		"dev": "node --enable-source-maps dist/index.js",
 		"lint": "eslint . --format json",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"test": "vitest run tests",
@@ -17,7 +16,7 @@
 		"clean": "rm -rf dist"
 	},
 	"dependencies": {
-		"@herzen/vad": "workspace:*"
+		"onnxruntime-node": "^1.22.0"
 	},
 	"devDependencies": {}
 }

@@ -11,11 +11,16 @@ General documents live at the docs root. Topic-specific docs are grouped in subf
 - /Users/parkharo/Programming/herzen/docs/architecture/overview.md
 - /Users/parkharo/Programming/herzen/docs/architecture/wakeword_sidecar_contract.md
 
+## Internal
+
+- /Users/parkharo/Programming/herzen/docs/internal/adaptive_vad_failure_guide.md
+
 ## Packages
 
 - /Users/parkharo/Programming/herzen/docs/packages/overview.md
 - /Users/parkharo/Programming/herzen/docs/packages/stt.md
 - /Users/parkharo/Programming/herzen/docs/packages/tts.md
+- /Users/parkharo/Programming/herzen/docs/packages/vad.md
 
 ## Hardware
 

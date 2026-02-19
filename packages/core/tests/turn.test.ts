@@ -13,7 +13,9 @@ function createNowMock(sequence: number[]) {
 function createDeps(overrides?: {
 	env?: NodeJS.ProcessEnv;
 	nowSequence?: number[];
+	recordingMode?: "fixed" | "adaptive";
 	transcribeImpl?: (file: string) => Promise<{ text: string; language: string; durationMs: number }>;
+	recordAdaptiveImpl?: (file: string, config: unknown) => Promise<{ durationSeconds: number; stopReason: string }>;
 	isSttError?: (err: unknown) => err is SttErrorLike;
 }) {
 	const logger = {
@@ -24,7 +26,13 @@ function createDeps(overrides?: {
 	const appendSttLog = vi.fn(async (entry: SttLogEntry) => {
 		void entry;
 	});
-	const recordAudio = vi.fn(async () => {});
+	const recordAudioFixed = vi.fn(async () => {});
+	const recordAudioAdaptive =
+		overrides?.recordAdaptiveImpl ??
+		vi.fn(async () => ({
+			durationSeconds: 2.4,
+			stopReason: "trailing_silence",
+		}));
 	const playAudio = vi.fn(async () => {});
 	const speak = vi.fn(async () => {});
 	const transcribeWav =
@@ -41,7 +49,9 @@ function createDeps(overrides?: {
 		now,
 		nowIso: () => "2026-02-14T00:00:00.000Z",
 		logger,
-		recordAudio,
+		recordingMode: overrides?.recordingMode ?? "fixed",
+		recordAudioFixed,
+		recordAudioAdaptive,
 		transcribeWav,
 		isSttError,
 		appendSttLog,
@@ -54,7 +64,8 @@ function createDeps(overrides?: {
 		logger,
 		now,
 		appendSttLog,
-		recordAudio,
+		recordAudioFixed,
+		recordAudioAdaptive,
 		playAudio,
 		speak,
 	};
@@ -62,7 +73,7 @@ function createDeps(overrides?: {
 
 describe("createSttTriggerHandler", () => {
 	it("handles successful STT result and uses confirmation speech", async () => {
-		const { deps, logger, appendSttLog, recordAudio, playAudio, speak } = createDeps({
+		const { deps, logger, appendSttLog, recordAudioFixed, playAudio, speak } = createDeps({
 			env: {
 				HERZEN_STT_LANGUAGE: "en",
 				HERZEN_RECORD_SECONDS: "5",
@@ -78,7 +89,7 @@ describe("createSttTriggerHandler", () => {
 
 		await handleTrigger();
 
-		expect(recordAudio).toHaveBeenCalledWith("/tmp/audio/test-1000.wav", 5);
+		expect(recordAudioFixed).toHaveBeenCalledWith("/tmp/audio/test-1000.wav", 5);
 		expect(playAudio).toHaveBeenCalledWith("/tmp/audio/test-1000.wav");
 		expect(speak).toHaveBeenCalledWith("[en] I heard: hello world");
 		expect(logger.log).toHaveBeenCalledWith("[en detected]");
@@ -170,5 +181,80 @@ describe("createSttTriggerHandler", () => {
 		);
 		expect(playAudio).toHaveBeenCalledWith("/tmp/audio/test-4000.wav");
 		expect(speak).toHaveBeenCalledWith("[en] I couldn't understand that.");
+	});
+
+	it("uses adaptive recording mode and does not call fixed recorder on success", async () => {
+		const { deps, recordAudioAdaptive, recordAudioFixed, logger } = createDeps({
+			recordingMode: "adaptive",
+			env: {
+				HERZEN_RECORD_MIN_SECONDS: "1",
+				HERZEN_RECORD_MAX_SECONDS: "6",
+				HERZEN_RECORD_SILENCE_SECONDS: "0.6",
+				HERZEN_RECORD_NO_SPEECH_TIMEOUT_SECONDS: "3",
+				HERZEN_VAD_START_THRESHOLD: "0.6",
+				HERZEN_VAD_END_THRESHOLD: "0.3",
+				HERZEN_VAD_FRAME_SAMPLES: "512",
+			},
+		});
+
+		const handleTrigger = createSttTriggerHandler(deps);
+		await handleTrigger();
+
+		expect(recordAudioAdaptive).toHaveBeenCalledWith(
+			"/tmp/audio/test-1000.wav",
+			expect.objectContaining({
+				minSeconds: 1,
+				maxSeconds: 6,
+				silenceSeconds: 0.6,
+				noSpeechTimeoutSeconds: 3,
+				startThreshold: 0.6,
+				endThreshold: 0.3,
+				frameSamples: 512,
+			}),
+		);
+		expect(recordAudioFixed).not.toHaveBeenCalled();
+		expect(logger.log).toHaveBeenCalledWith("Triggered. Adaptive recording…");
+	});
+
+	it("falls back to fixed recording when adaptive recording throws", async () => {
+		const { deps, recordAudioAdaptive, recordAudioFixed, logger } = createDeps({
+			recordingMode: "adaptive",
+			env: {
+				HERZEN_RECORD_SECONDS: "4",
+			},
+			recordAdaptiveImpl: vi.fn(async () => {
+				throw new Error("vad unavailable");
+			}),
+		});
+
+		const handleTrigger = createSttTriggerHandler(deps);
+		await handleTrigger();
+
+		expect(recordAudioAdaptive).toHaveBeenCalledTimes(1);
+		expect(recordAudioFixed).toHaveBeenCalledWith("/tmp/audio/test-1000.wav", 4);
+		expect(logger.error).toHaveBeenCalledWith(
+			"Adaptive recording failed. Falling back to fixed recording for this turn.",
+		);
+		expect(logger.error).toHaveBeenCalledWith("Adaptive recording error: vad unavailable");
+	});
+
+	it("falls back to fixed recording when adaptive env config is invalid", async () => {
+		const { deps, recordAudioAdaptive, recordAudioFixed, logger } = createDeps({
+			recordingMode: "adaptive",
+			env: {
+				HERZEN_RECORD_SECONDS: "3",
+				HERZEN_VAD_START_THRESHOLD: "0.2",
+				HERZEN_VAD_END_THRESHOLD: "0.4",
+			},
+		});
+
+		const handleTrigger = createSttTriggerHandler(deps);
+		await handleTrigger();
+
+		expect(recordAudioAdaptive).not.toHaveBeenCalled();
+		expect(recordAudioFixed).toHaveBeenCalledWith("/tmp/audio/test-1000.wav", 3);
+		expect(logger.error).toHaveBeenCalledWith(
+			"Invalid adaptive recording config (HERZEN_VAD_END_THRESHOLD must be <= HERZEN_VAD_START_THRESHOLD.). Falling back to fixed recording for this turn.",
+		);
 	});
 });

@@ -1,4 +1,4 @@
-import { recordWav, playAudio, beep } from "@herzen/audio";
+import { recordWav, recordAdaptiveWav, playAudio, beep } from "@herzen/audio";
 import { transcribeWav, SttError } from "@herzen/stt";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -6,6 +6,11 @@ import { fileURLToPath } from "node:url";
 import { format } from "node:util";
 import { speak } from "@herzen/tts";
 import { createLogger, toStructuredSttTurnEntry } from "./logging.js";
+import {
+	resolveInitialAdaptiveMaxSecondsInteractive,
+	resolveInitialRecordingModeInteractive,
+	type RecordingMode,
+} from "./recording/factory.js";
 import { createRuntime, type RuntimeController } from "./runtime.js";
 import { createSttTriggerHandler, type SttLogEntry } from "./turn.js";
 import {
@@ -105,48 +110,81 @@ async function recordWithProgress(file: string, seconds: number): Promise<void> 
 	}
 }
 
-const handleTrigger = createSttTriggerHandler({
-	outDir,
-	getEnv: () => process.env,
-	now: () => Date.now(),
-	nowIso: () => new Date().toISOString(),
-	logger: sttTurnLogger,
-	recordAudio: async (file, seconds) => {
-		await beep();
-		await recordWithProgress(file, seconds);
-	},
-	transcribeWav,
-	isSttError: (err): err is SttError => err instanceof SttError,
-	appendSttLog,
-	playAudio,
-	speak,
-});
+function createHandleTrigger(
+	recordingMode: RecordingMode,
+	envOverrides: NodeJS.ProcessEnv,
+): () => Promise<void> {
+	const getRuntimeEnv = () => ({ ...process.env, ...envOverrides });
+
+	return createSttTriggerHandler({
+		outDir,
+		getEnv: getRuntimeEnv,
+		now: () => Date.now(),
+		nowIso: () => new Date().toISOString(),
+		logger: sttTurnLogger,
+		recordingMode,
+		recordAudioFixed: async (file, seconds) => {
+			await beep();
+			await recordWithProgress(file, seconds);
+		},
+		recordAudioAdaptive: async (file, config) => {
+			const env = getRuntimeEnv();
+			await beep();
+			return recordAdaptiveWav(file, {
+				...config,
+				modelPath: env.HERZEN_VAD_MODEL,
+				dataDir: env.HERZEN_DATA_DIR,
+			});
+		},
+		transcribeWav,
+		isSttError: (err): err is SttError => err instanceof SttError,
+		appendSttLog,
+		playAudio,
+		speak,
+	});
+}
 
 interface StartupTriggerRuntimeConfig {
 	triggerMode: TriggerMode;
 	createSource: (mode: TriggerMode) => TriggerSource;
+	recordingMode: RecordingMode;
+	recordEnvOverrides: NodeJS.ProcessEnv;
 }
 
 async function resolveStartupTriggerRuntimeConfig(): Promise<StartupTriggerRuntimeConfig> {
+	const recordingMode = await resolveInitialRecordingModeInteractive();
+	const recordEnvOverrides: NodeJS.ProcessEnv = {};
+	if (recordingMode === "adaptive") {
+		const adaptiveMaxSeconds = await resolveInitialAdaptiveMaxSecondsInteractive({
+			rawMaxSeconds: process.env.HERZEN_RECORD_MAX_SECONDS,
+			defaultMaxSeconds: 30,
+		});
+		recordEnvOverrides.HERZEN_RECORD_MAX_SECONDS = String(adaptiveMaxSeconds);
+	}
+
 	const selectedMode = await resolveInitialTriggerModeInteractive();
 	if (selectedMode !== "wakeword") {
 		return {
 			triggerMode: selectedMode,
 			createSource: createTriggerSource,
+			recordingMode,
+			recordEnvOverrides,
 		};
 	}
 
 	const wakewordSource = createTriggerSource("wakeword");
 	try {
 		await wakewordSource.start();
-		return {
-			triggerMode: "wakeword",
-			createSource: (mode) => {
-				if (mode !== "wakeword") return createTriggerSource(mode);
-				return createPrestartedSource(wakewordSource);
-			},
-		};
-	} catch (err) {
+			return {
+				triggerMode: "wakeword",
+				createSource: (mode) => {
+					if (mode !== "wakeword") return createTriggerSource(mode);
+					return createPrestartedSource(wakewordSource);
+				},
+				recordingMode,
+				recordEnvOverrides,
+			};
+		} catch (err) {
 		if (isTriggerError(err) && (err.code === "SOURCE_FAILED" || err.code === "SOURCE_CLOSED")) {
 			process.stderr.write(`Wakeword unavailable: ${err.message}\n`);
 			const shouldSwitch = await shouldSwitchToStdinAfterWakewordFailure();
@@ -156,11 +194,13 @@ async function resolveStartupTriggerRuntimeConfig(): Promise<StartupTriggerRunti
 				} catch {
 					// Ignore cleanup failure and proceed with stdin fallback.
 				}
-				return {
-					triggerMode: "stdin",
-					createSource: createTriggerSource,
-				};
-			}
+					return {
+						triggerMode: "stdin",
+						createSource: createTriggerSource,
+						recordingMode,
+						recordEnvOverrides,
+					};
+				}
 		}
 		try {
 			await wakewordSource.stop();
@@ -203,11 +243,17 @@ async function main(): Promise<void> {
 		resolveTriggerMode: () => startupConfig.triggerMode,
 		createTriggerSource: startupConfig.createSource,
 		isTriggerError,
-		onTrigger: handleTrigger,
+		onTrigger: createHandleTrigger(startupConfig.recordingMode, startupConfig.recordEnvOverrides),
 		logger: runtimeLogger,
 		exit: flushAndExit,
 	});
 
+	runtimeLogger.log(`Recording mode: ${startupConfig.recordingMode}`);
+	if (startupConfig.recordingMode === "adaptive" && startupConfig.recordEnvOverrides.HERZEN_RECORD_MAX_SECONDS) {
+		runtimeLogger.log(
+			`Adaptive max length: ${startupConfig.recordEnvOverrides.HERZEN_RECORD_MAX_SECONDS}s`,
+		);
+	}
 	await runtime.run();
 }
 

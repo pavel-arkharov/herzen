@@ -155,7 +155,7 @@ Current typed error codes:
 
 Current `@herzen/core` trigger flow:
 
-1. Record WAV audio.
+1. Record WAV audio (fixed or adaptive endpointing mode).
 2. Call `transcribeWav`.
 3. Log STT event to `data/logs/stt.jsonl`.
 4. Speak transcript-aware confirmation when non-empty, otherwise fallback speech.

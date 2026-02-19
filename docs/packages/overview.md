@@ -2,7 +2,7 @@
 
 This document lists the current packages in the Herzen monorepo.
 
-**core**, **audio**, **stt**, **tts**, and **wakeword** are currently implemented.
+**core**, **audio**, **stt**, **tts**, **vad**, and **wakeword** are currently implemented.
 Other packages (integrations) will be added later.
 
 ---
@@ -29,9 +29,15 @@ to keep things simple and debuggable.
 
 Recording APIs:
 - `recordWav(...)` for fixed-duration capture
+- `recordAdaptiveWav(...)` for VAD-based adaptive endpointing
 
 Current system dependency:
 - `rec` and `play` from SoX
+
+Adaptive recording dependency chain:
+- `@herzen/vad` workspace package
+- `onnxruntime-node` (via `@herzen/vad`)
+- Silero VAD model file (`data/models/silero_vad.onnx` by default, or `HERZEN_VAD_MODEL`)
 
 Future versions may:
 
@@ -66,6 +72,8 @@ Current behavior (prototype):
 - defaults to `stdin` trigger mode (manual Enter key)
 - supports mode selection through `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`)
 - includes a `wakeword` trigger adapter backed by `@herzen/wakeword` (still in-progress for next stretch)
+- supports recording mode selection (`fixed` / `adaptive`) during interactive startup
+- when adaptive mode is selected interactively, prompts for adaptive max length for the current run
 - uses typed trigger-domain errors for control flow (`SOURCE_CLOSED`, `SOURCE_FAILED`)
 - keeps a runtime-lifecycle `stdin` error listener in the trigger source, including during pipeline handling
 - resolves default data output to repo-local `data/audio` independently of launch cwd
@@ -76,7 +84,18 @@ Current behavior (prototype):
 - gates transcript persistence in logs with `HERZEN_LOG_TRANSCRIPT` (default disabled)
 - sanitizes JSONL stream names and degrades logging sink failures to console warnings
 - emits a short beep
-- records audio to `data/audio` with fixed duration (`HERZEN_RECORD_SECONDS`, default `3`)
+- records audio to `data/audio` in two modes:
+  - fixed: `HERZEN_RECORD_SECONDS` (default `3`)
+  - adaptive: VAD endpointing driven by:
+    - `HERZEN_RECORD_MIN_SECONDS` (default `1`)
+    - `HERZEN_RECORD_MAX_SECONDS` (default `12`)
+    - `HERZEN_RECORD_SILENCE_SECONDS` (default `0.7`)
+    - `HERZEN_RECORD_NO_SPEECH_TIMEOUT_SECONDS` (default `4`)
+    - `HERZEN_VAD_START_THRESHOLD` (default `0.55`)
+    - `HERZEN_VAD_END_THRESHOLD` (default `0.35`)
+    - `HERZEN_VAD_FRAME_SAMPLES` (default `512`)
+- falls back to fixed recording for the current turn when adaptive config is invalid
+- falls back to fixed recording for the current turn when adaptive runtime fails
 - runs local STT transcription and logs per-turn telemetry (latency, duration, language mode, detected language, optional error code)
 - plays the recording only when `HERZEN_PLAYBACK=1`
 - speaks transcript-aware confirmation or a fallback message
@@ -124,6 +143,34 @@ Current error model:
 - `MODEL_MISSING`
 - `TRANSCRIBE_FAILED`
 - `OUTPUT_PARSE_FAILED`
+
+---
+
+## @herzen/vad
+
+**Purpose**  
+Local voice activity detection primitives for adaptive endpointing.
+
+This package is responsible for:
+
+- resolving/validating local VAD model path and runtime configuration
+- loading Silero VAD ONNX model sessions
+- returning speech probability per audio frame
+- managing recurrent VAD state tensors across frames
+
+Current dependency:
+- `onnxruntime-node`
+
+Model path behavior:
+- explicit override: `HERZEN_VAD_MODEL`
+- default: `data/models/silero_vad.onnx` (uses `HERZEN_DATA_DIR` if set)
+
+Current error model:
+- config: `CONFIG_INVALID`, `MODEL_MISSING`, `MODEL_UNREADABLE`
+- runtime: `RUNTIME_MISSING`, `MODEL_INVALID`, `INFERENCE_FAILED`
+
+See detailed package notes in:
+- `/Users/parkharo/Programming/herzen/docs/packages/vad.md`
 
 ---
 
