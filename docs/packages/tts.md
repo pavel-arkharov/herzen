@@ -53,31 +53,56 @@ TTS in Herzen is designed with the following principles:
 
 ---
 
-## Current state (early prototype)
+## Current state
 
-At the current stage, TTS is implemented using **macOS built-in speech synthesis**
-via the `say` command.
+At the current stage, TTS is implemented as a **provider boundary** with:
+
+- `say` as the default provider
+- optional local `piper` provider for EN/RU neural synthesis
+- optional `xtts` sidecar provider for higher-quality local synthesis
 
 Characteristics:
 
 - 100% local
-- Zero setup
-- Uses system voices provided by macOS
-- Supports multiple languages out of the box
+- Default path has zero setup (`say`)
+- Optional sidecar path stays local and loopback-only by default
+- Supports multiple languages (English/Russian) out of the box
+- Provider failure can fall back to configured local fallback provider (`say` by default)
 
 Language selection is handled by:
 
 - Explicit **leading** language tags in text (e.g. `[en]`, `[ru]`)
 - Or a simple heuristic (presence of Cyrillic characters)
 
-This implementation is intentionally simple and temporary.
-Its purpose is to enable fast iteration and make the assistant “talk back” early.
-
-Current dependency:
+Current dependencies:
 - macOS `say`
+- local `piper` CLI (when `HERZEN_TTS_PROVIDER=piper`)
+- local audio playback tool (`play` from SoX, with `afplay` fallback)
+- optional local XTTS sidecar endpoint (`POST /synthesize`)
+
+Current environment surface:
+
+- `HERZEN_TTS_PROVIDER` (`say`, `piper`, `xtts`)
+- `HERZEN_TTS_FALLBACK_PROVIDER` (default `say`)
+- `HERZEN_TTS_PIPER_MODEL_EN` (absolute path to EN `.onnx`)
+- `HERZEN_TTS_PIPER_MODEL_RU` (absolute path to RU `.onnx`)
+- `HERZEN_TTS_PIPER_CONFIG_EN` (optional path to EN `.onnx.json`)
+- `HERZEN_TTS_PIPER_CONFIG_RU` (optional path to RU `.onnx.json`)
+- `HERZEN_TTS_RATE_SCALE` (optional Piper `--length_scale`)
+- `HERZEN_TTS_NOISE_SCALE` (optional Piper `--noise_scale`)
+- `HERZEN_TTS_NOISE_W` (optional Piper `--noise_w`)
+- `HERZEN_TTS_XTTS_ENDPOINT` (default `http://127.0.0.1:8020`)
+- `HERZEN_TTS_XTTS_TIMEOUT_MS` (default `12000`)
+- `HERZEN_TTS_XTTS_VOICE_PROFILE` (default `default`)
+- `HERZEN_ALLOW_REMOTE_TTS` (default disabled; endpoint must be loopback unless explicitly overridden)
+
+Expected local Piper model layout:
+- `data/models/tts/piper/en/...`
+- `data/models/tts/piper/ru/...`
 
 Current error behavior:
-- Errors bubble to the caller; the core loop catches and continues
+- Provider failures (`piper` or `xtts`) can fall back once to the configured fallback provider
+- unrecoverable provider errors bubble to the caller; the core loop catches and continues
 
 ---
 
@@ -104,17 +129,17 @@ The core package never directly invokes system TTS tools.
 
 TTS is expected to evolve in stages:
 
-### Stage 1 — System voices (current)
+### Stage 1 — System voices (current baseline)
 
 - macOS `say`
 - Focus on correctness and responsiveness
 - Suitable for development and early daily use
 
-### Stage 2 — Local neural TTS
+### Stage 2 — Local neural TTS (in progress)
 
-- Replace system voices with a fully local neural TTS engine (e.g. Piper)
-- Higher quality, more natural prosody
-- Still fully offline and efficient
+- Optional Piper provider for lightweight local neural synthesis
+- Optional XTTS sidecar provider for higher quality and voice-profile path
+- Still fully offline and local-first
 
 ### Stage 3 — Personal voice synthesis
 

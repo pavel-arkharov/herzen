@@ -2,7 +2,7 @@
 
 This document lists the current packages in the Herzen monorepo.
 
-**core**, **audio**, **stt**, **tts**, **vad**, **wakeword**, and **response** are currently implemented.
+**core**, **audio**, **stt**, **tts**, **vad**, **wakeword**, and **dialog** are currently implemented.
 Other packages (integrations) will be added later.
 
 ---
@@ -80,8 +80,14 @@ Current behavior (prototype):
 - supports `HERZEN_DATA_DIR` override (writes to `HERZEN_DATA_DIR/audio`)
 - writes runtime structured logs to `data/logs/runtime.jsonl`
 - writes STT turn logs to `data/logs/stt.jsonl`
+- writes per-session conversation journals to:
+  - `data/conversations/<sessionId>.jsonl` (machine-readable events)
+  - `data/conversations/<sessionId>.md` (human-readable dialogue journal)
 - supports log level control through `HERZEN_LOG_LEVEL` (`info`, `warn`, `error`; default `info`)
 - gates transcript persistence in logs with `HERZEN_LOG_TRANSCRIPT` (default disabled)
+- omits STT audio input path by default; include it only with `HERZEN_LOG_AUDIO_INPUT=1`
+- supports dialog-journal toggle with `HERZEN_LOG_DIALOG` (default enabled)
+- supports markdown-journal toggle with `HERZEN_LOG_DIALOG_MARKDOWN` (default enabled)
 - sanitizes JSONL stream names and degrades logging sink failures to console warnings
 - emits a short beep
 - records audio to `data/audio` in two modes:
@@ -97,8 +103,13 @@ Current behavior (prototype):
 - falls back to fixed recording for the current turn when adaptive config is invalid
 - falls back to fixed recording for the current turn when adaptive runtime fails
 - runs local STT transcription and logs per-turn telemetry (latency, duration, language mode, detected language, optional error code)
+- keeps an in-memory bounded context window for recent turns and injects it into LLM requests
+  - `HERZEN_CONTEXT_ENABLED` (default `1`)
+  - `HERZEN_CONTEXT_MAX_TURNS` (default `6`)
+  - `HERZEN_CONTEXT_MAX_CHARS` (default `4000`)
+- appends session-scoped conversation events (`session_started`, `user_utterance`, `assistant_utterance`, action placeholders, `error`, `session_ended`)
 - plays the recording only when `HERZEN_PLAYBACK=1`
-- speaks model-generated reply text via `@herzen/response` or a fallback message
+- speaks model-generated reply text via `@herzen/dialog` or a fallback message
 
 ---
 
@@ -181,18 +192,42 @@ Text-to-speech output utilities.
 
 This package is responsible for:
 
-- converting text to speech via system voice APIs
+- converting text to speech via local provider adapters
 - supporting multiple languages (English, Russian)
 - detecting language from text or parsing explicit **leading** language tags
 
-The implementation currently wraps macOS `say` command for simplicity and debuggability.
+Current implemented providers:
+
+- `say` (default, macOS built-in)
+- `piper` (local CLI synthesis with EN/RU model selection)
+- `xtts` sidecar client (`POST /synthesize` to a local HTTP endpoint)
+
+Provider/fallback environment surface:
+
+- `HERZEN_TTS_PROVIDER` (`say`, `piper`, `xtts`)
+- `HERZEN_TTS_FALLBACK_PROVIDER` (default `say`)
+- `HERZEN_TTS_PIPER_MODEL_EN` (absolute path to EN `.onnx`)
+- `HERZEN_TTS_PIPER_MODEL_RU` (absolute path to RU `.onnx`)
+- `HERZEN_TTS_PIPER_CONFIG_EN` (optional path to EN `.onnx.json`)
+- `HERZEN_TTS_PIPER_CONFIG_RU` (optional path to RU `.onnx.json`)
+- `HERZEN_TTS_RATE_SCALE` (optional Piper `--length_scale`)
+- `HERZEN_TTS_NOISE_SCALE` (optional Piper `--noise_scale`)
+- `HERZEN_TTS_NOISE_W` (optional Piper `--noise_w`)
+- `HERZEN_TTS_XTTS_ENDPOINT` (default `http://127.0.0.1:8020`)
+- `HERZEN_TTS_XTTS_TIMEOUT_MS` (default `12000`)
+- `HERZEN_TTS_XTTS_VOICE_PROFILE` (default `default`)
+- `HERZEN_ALLOW_REMOTE_TTS` (default disabled; endpoint must be loopback unless explicitly overridden)
+
+Expected local Piper model layout:
+- `data/models/tts/piper/en/...`
+- `data/models/tts/piper/ru/...`
 
 Current system dependency:
 - macOS `say`
+- local playback tool (`play` from SoX, `afplay` fallback)
 
 Future versions may:
 
-- add higher-quality TTS engines (cloud or local)
 - expose streaming speech instead of file-based output
 - support more languages
 
@@ -231,7 +266,7 @@ Daemon repository:
 
 ---
 
-## @herzen/response
+## @herzen/dialog
 
 **Purpose**  
 Local assistant reply generation boundary (text-in, text-out).
@@ -246,7 +281,7 @@ Current status:
 
 - provider contract is implemented
 - Ollama provider is implemented (`POST /api/chat`, non-streaming)
-- core STT-success path consumes `@herzen/response` and speaks model reply text
+- core STT-success path consumes `@herzen/dialog` and speaks model reply text
 
 Current planned provider:
 

@@ -46,8 +46,9 @@ At the moment, the system supports:
 - fixed recording via `HERZEN_RECORD_SECONDS` (default `3`)
 - adaptive recording via `@herzen/vad`-backed endpointing (speech start/stop thresholds, silence window, max cap, no-speech timeout)
 - stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override
-- local text-to-speech via macOS `say`
-- local LLM-backed reply generation via `@herzen/response` (Ollama provider, text-in/text-out)
+- local text-to-speech via `@herzen/tts` providers (`say` default, optional local `xtts` sidecar)
+- local LLM-backed reply generation via `@herzen/dialog` (Ollama provider, text-in/text-out)
+- in-session short-term context window for LLM requests (bounded by `HERZEN_CONTEXT_ENABLED`, `HERZEN_CONTEXT_MAX_TURNS`, `HERZEN_CONTEXT_MAX_CHARS`)
 
 Wakeword mode now runs through the external `herzen-wake` daemon and can trigger full turns in `@herzen/core`.
 
@@ -64,7 +65,25 @@ For a non-technical, step-by-step local setup guide, use:
 ## System dependencies (current prototype)
 
 - SoX (`rec` and `play`) for audio capture and playback
-- macOS `say` for text-to-speech
+- macOS `say` for default text-to-speech
+- optional local Piper models for neural text-to-speech:
+  - `HERZEN_TTS_PROVIDER=piper`
+  - `HERZEN_TTS_PIPER_MODEL_EN` (absolute path to EN `.onnx`)
+  - `HERZEN_TTS_PIPER_MODEL_RU` (absolute path to RU `.onnx`)
+  - `HERZEN_TTS_PIPER_CONFIG_EN` (optional EN `.onnx.json`)
+  - `HERZEN_TTS_PIPER_CONFIG_RU` (optional RU `.onnx.json`)
+  - optional synthesis knobs:
+    - `HERZEN_TTS_RATE_SCALE`
+    - `HERZEN_TTS_NOISE_SCALE`
+    - `HERZEN_TTS_NOISE_W`
+  - expected model placement: `data/models/tts/piper/<lang>/...`
+- optional local XTTS sidecar endpoint for higher-quality text-to-speech:
+  - `HERZEN_TTS_PROVIDER=xtts`
+  - `HERZEN_TTS_XTTS_ENDPOINT` (default `http://127.0.0.1:8020`)
+  - `HERZEN_TTS_XTTS_TIMEOUT_MS` (default `12000`)
+  - `HERZEN_TTS_XTTS_VOICE_PROFILE` (default `default`)
+  - `HERZEN_TTS_FALLBACK_PROVIDER` (default `say`)
+  - `HERZEN_ALLOW_REMOTE_TTS` (default disabled; loopback-only endpoint guard)
 - whisper.cpp CLI (`whisper-cli` on PATH or `HERZEN_WHISPER_BIN`) for STT transcription
 - local whisper model file path via `HERZEN_WHISPER_MODEL` for STT transcription
 - Silero VAD model file for adaptive recording:
@@ -80,7 +99,7 @@ Wakeword mode dependency:
 
 LLM response dependency:
 
-- local Ollama runtime (`ollama serve`) for `@herzen/response`
+- local Ollama runtime (`ollama serve`) for `@herzen/dialog`
 - model selection via `HERZEN_OLLAMA_MODEL` (required)
 - optional endpoint override via `HERZEN_OLLAMA_BASE_URL` (loopback-only by default)
 
@@ -97,7 +116,7 @@ packages/
   tts/ # text-to-speech utilities
   vad/ # voice activity detection (Silero VAD wrapper)
   wakeword/ # wakeword sidecar client utilities
-  response/ # local LLM response generation boundary (scaffold)
+  dialog/ # local LLM dialog generation boundary
 data/ # local-only runtime data (gitignored)
   audio/
   logs/
@@ -105,7 +124,7 @@ data/ # local-only runtime data (gitignored)
 docs/ # architecture, packages, and design notes
 ```
 
-Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`, `packages/vad`, `packages/wakeword`, `packages/response`.
+Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`, `packages/vad`, `packages/wakeword`, `packages/dialog`.
 
 ---
 
@@ -154,15 +173,15 @@ Supported input formats:
   - `pnpm test:stt`
   - `pnpm test:tts`
   - `pnpm test:wakeword`
-  - `pnpm test:response`
+  - `pnpm test:dialog`
   - `pnpm --filter @herzen/vad test`
 
 Current baseline is focused unit coverage for trigger handling, STT/core turn orchestration, adaptive VAD recording behavior, file-transcription CLI/document generation, and package command-wrapper behavior.
 
 ## Development Notes
 
-- `pnpm dev` and `pnpm -C packages/core dev:watch` currently build `@herzen/response` once at startup.
-- When editing files under `packages/response/src`, rerun `pnpm --filter @herzen/response build` and restart the core dev process.
+- `pnpm dev` and `pnpm -C packages/core dev:watch` currently build `@herzen/dialog` once at startup.
+- When editing files under `packages/dialog/src`, rerun `pnpm --filter @herzen/dialog build` and restart the core dev process.
 
 ---
 
