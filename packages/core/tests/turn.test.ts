@@ -523,7 +523,28 @@ describe("createSttTriggerHandler", () => {
 		expect(logger.log).toHaveBeenCalledWith("Triggered. Adaptive recording…");
 	});
 
-	it("caps adaptive no-speech timeout by remaining follow-up window", async () => {
+	it("uses remaining follow-up window as fixed recording duration", async () => {
+		const { deps, recordAudioFixed } = createDeps({
+			recordingMode: "fixed",
+			env: {
+				HERZEN_RECORD_SECONDS: "3",
+			},
+			transcribeImpl: async () => ({
+				text: "followup",
+				language: "en",
+				durationMs: 100,
+			}),
+		});
+
+		await runSttTurn(deps, 1, {
+			mode: "followup",
+			remainingWindowMs: 8_000,
+		});
+
+		expect(recordAudioFixed).toHaveBeenCalledWith("/tmp/audio/test-1000.wav", 8);
+	});
+
+	it("uses remaining follow-up window for adaptive no-speech timeout", async () => {
 		const { deps, recordAudioAdaptive } = createDeps({
 			recordingMode: "adaptive",
 			env: {
@@ -551,6 +572,39 @@ describe("createSttTriggerHandler", () => {
 			"/tmp/audio/test-1000.wav",
 			expect.objectContaining({
 				noSpeechTimeoutSeconds: 3,
+			}),
+		);
+	});
+
+	it("does not shorten follow-up silence wait using adaptive defaults", async () => {
+		const { deps, recordAudioAdaptive } = createDeps({
+			recordingMode: "adaptive",
+			env: {
+				HERZEN_RECORD_MIN_SECONDS: "1",
+				HERZEN_RECORD_MAX_SECONDS: "2",
+				HERZEN_RECORD_SILENCE_SECONDS: "0.6",
+				HERZEN_RECORD_NO_SPEECH_TIMEOUT_SECONDS: "1",
+				HERZEN_VAD_START_THRESHOLD: "0.6",
+				HERZEN_VAD_END_THRESHOLD: "0.3",
+				HERZEN_VAD_FRAME_SAMPLES: "512",
+			},
+			transcribeImpl: async () => ({
+				text: "followup",
+				language: "en",
+				durationMs: 100,
+			}),
+		});
+
+		await runSttTurn(deps, 1, {
+			mode: "followup",
+			remainingWindowMs: 8_000,
+		});
+
+		expect(recordAudioAdaptive).toHaveBeenCalledWith(
+			"/tmp/audio/test-1000.wav",
+			expect.objectContaining({
+				maxSeconds: 8,
+				noSpeechTimeoutSeconds: 8,
 			}),
 		);
 	});

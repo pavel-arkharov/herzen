@@ -111,7 +111,7 @@ Current behavior (prototype):
   - `HERZEN_CONTEXT_MAX_CHARS` (default `4000`)
 - supports bounded conversational follow-up mode (default disabled):
   - `HERZEN_FOLLOWUP_ENABLED` (default `0`)
-  - `HERZEN_FOLLOWUP_WINDOW_SECONDS` (default `8`)
+  - `HERZEN_FOLLOWUP_WINDOW_SECONDS` (default `8`, per-turn silence wait budget)
   - `HERZEN_FOLLOWUP_MAX_TURNS` (default `3`)
   - `HERZEN_FOLLOWUP_STOP_PHRASES` (optional CSV, normalized exact match)
   - follow-up closes on timeout, no speech, stop phrase, max turns, or turn error

@@ -1,6 +1,8 @@
 import type { FollowupConfig } from "./followup_config.js";
 import type { RunSttTurnOptions, TurnOutcome } from "./turn.js";
 
+const MIN_FOLLOWUP_TURN_WINDOW_MS = 250;
+
 export type FollowupCloseReason = "timeout" | "no_speech" | "stop_phrase" | "max_turns" | "error";
 
 export interface FollowupSessionResult {
@@ -62,7 +64,8 @@ export async function runFollowupSession(
 
 	const callbacks = options.callbacks ?? {};
 	const openedAtMs = options.nowMs();
-	const deadlineMs = openedAtMs + Math.round(config.windowSeconds * 1000);
+	const windowMs = Math.round(config.windowSeconds * 1000);
+	let deadlineMs = openedAtMs + windowMs;
 
 	await callbacks.onWindowOpened?.({
 		windowSeconds: config.windowSeconds,
@@ -89,7 +92,7 @@ export async function runFollowupSession(
 
 	while (executedTurns < config.maxTurns) {
 		const remainingWindowMs = deadlineMs - options.nowMs();
-		if (remainingWindowMs <= 0) {
+		if (remainingWindowMs <= MIN_FOLLOWUP_TURN_WINDOW_MS) {
 			return close("timeout");
 		}
 
@@ -124,6 +127,9 @@ export async function runFollowupSession(
 		if (outcome.transcript && options.isStopPhrase(outcome.transcript)) {
 			return close("stop_phrase");
 		}
+
+		// Refresh the follow-up timeout budget after each successful turn.
+		deadlineMs = options.nowMs() + windowMs;
 	}
 
 	return close("max_turns");

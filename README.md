@@ -50,6 +50,7 @@ At the moment, the system supports:
 - local LLM-backed reply generation via `@herzen/dialog` (Ollama provider, text-in/text-out)
 - in-session short-term context window for LLM requests (bounded by `HERZEN_CONTEXT_ENABLED`, `HERZEN_CONTEXT_MAX_TURNS`, `HERZEN_CONTEXT_MAX_CHARS`)
 - optional conversational follow-up mode after each reply (default off) with bounded window/turns (`HERZEN_FOLLOWUP_ENABLED`, `HERZEN_FOLLOWUP_WINDOW_SECONDS`, `HERZEN_FOLLOWUP_MAX_TURNS`, `HERZEN_FOLLOWUP_STOP_PHRASES`)
+  - `HERZEN_FOLLOWUP_WINDOW_SECONDS` is the per-turn silence wait budget in follow-up mode
 
 Wakeword mode now runs through the external `herzen-wake` daemon and can trigger full turns in `@herzen/core`.
 

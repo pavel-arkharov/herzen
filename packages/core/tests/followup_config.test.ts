@@ -51,6 +51,21 @@ describe("resolveFollowupConfig", () => {
 		});
 		expect(warn).toHaveBeenCalledTimes(3);
 	});
+
+	it("rejects partially numeric follow-up window values", () => {
+		const warn = vi.fn();
+		const config = resolveFollowupConfig(
+			{
+				HERZEN_FOLLOWUP_WINDOW_SECONDS: "8abc",
+			},
+			{ warn },
+		);
+
+		expect(config.windowSeconds).toBe(8);
+		expect(warn).toHaveBeenCalledWith(
+			'Invalid HERZEN_FOLLOWUP_WINDOW_SECONDS "8abc". Falling back to 8.',
+		);
+	});
 });
 
 describe("stop phrase normalization", () => {

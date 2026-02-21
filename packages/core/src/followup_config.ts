@@ -84,7 +84,7 @@ function resolvePositiveFiniteNumber(
 ): number {
 	const trimmed = rawValue?.trim();
 	if (!trimmed) return fallback;
-	const parsed = Number.parseFloat(trimmed);
+	const parsed = Number(trimmed);
 	if (Number.isFinite(parsed) && parsed > 0) return parsed;
 
 	logger?.warn(`Invalid ${envName} "${rawValue}". Falling back to ${fallback}.`);

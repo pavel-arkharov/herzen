@@ -182,7 +182,7 @@ export async function runSttTurn(
 	const recordSeconds = resolveRecordSeconds(env.HERZEN_RECORD_SECONDS, deps.logger);
 	const effectiveRecordSeconds =
 		mode === "followup" && remainingWindowSeconds !== undefined
-			? Math.min(recordSeconds, Math.max(MIN_RECORD_SECONDS, remainingWindowSeconds))
+			? Math.max(MIN_RECORD_SECONDS, remainingWindowSeconds)
 			: recordSeconds;
 	const playbackEnabled = resolvePlaybackEnabled(env.HERZEN_PLAYBACK);
 
@@ -478,7 +478,7 @@ async function recordTurnAudio(
 	}
 
 	const adaptiveSettings = resolveAdaptiveRecordSettings(env, deps.logger, {
-		noSpeechTimeoutCapSeconds:
+		followupNoSpeechTimeoutSeconds:
 			options.mode === "followup" ? options.remainingWindowSeconds : undefined,
 	});
 	if (!adaptiveSettings) {
@@ -509,11 +509,11 @@ function resolveAdaptiveRecordSettings(
 	env: NodeJS.ProcessEnv,
 	logger: TurnLogger,
 	options: {
-		noSpeechTimeoutCapSeconds?: number;
+		followupNoSpeechTimeoutSeconds?: number;
 	} = {},
 ): AdaptiveRecordSettings | null {
 	try {
-		const maxSeconds = resolvePositiveFiniteNumber(
+		let maxSeconds = resolvePositiveFiniteNumber(
 			env.HERZEN_RECORD_MAX_SECONDS,
 			DEFAULT_RECORD_MAX_SECONDS,
 			"HERZEN_RECORD_MAX_SECONDS",
@@ -533,11 +533,12 @@ function resolveAdaptiveRecordSettings(
 			DEFAULT_RECORD_NO_SPEECH_TIMEOUT_SECONDS,
 			"HERZEN_RECORD_NO_SPEECH_TIMEOUT_SECONDS",
 		);
-		if (typeof options.noSpeechTimeoutCapSeconds === "number") {
-			noSpeechTimeoutSeconds = Math.min(noSpeechTimeoutSeconds, options.noSpeechTimeoutCapSeconds);
+		if (typeof options.followupNoSpeechTimeoutSeconds === "number") {
+			noSpeechTimeoutSeconds = options.followupNoSpeechTimeoutSeconds;
 			if (noSpeechTimeoutSeconds <= 0) {
 				throw new Error("Follow-up recording window expired.");
 			}
+			maxSeconds = Math.max(maxSeconds, noSpeechTimeoutSeconds);
 		}
 		const startThreshold = resolveProbability(
 			env.HERZEN_VAD_START_THRESHOLD,
