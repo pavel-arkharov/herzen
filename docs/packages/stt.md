@@ -158,6 +158,7 @@ Current `@herzen/core` trigger flow:
 1. Record WAV audio (fixed or adaptive endpointing mode).
 2. Call `transcribeWav`.
 3. Log STT event to `data/logs/stt.jsonl`.
-4. Speak transcript-aware confirmation when non-empty, otherwise fallback speech.
+4. If transcript is non-empty, pass transcript + language metadata to `@herzen/dialog` for local LLM reply generation.
+5. Speak model reply on success; otherwise speak a short language-aware fallback.
 
-If STT fails, core logs the error and continues the loop.
+If STT fails, core logs the error, writes telemetry/journal entries, and continues the loop.

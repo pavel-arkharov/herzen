@@ -125,7 +125,7 @@ Optional package-local execution (from package directory):
 - VAD model-path/runtime config validation and session probability semantics
 - VAD ONNX engine behavior for recurrent state inputs/outputs (`h`, `c`, `hn`, `cn`)
 - Wakeword socket client lifecycle, protocol parsing, and error semantics
-- Response package config validation and provider-boundary scaffold behavior
+- Dialog package config validation, context-message injection, and provider-boundary behavior
 
 ## Known gaps
 

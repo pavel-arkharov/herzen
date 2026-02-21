@@ -180,8 +180,10 @@ Current baseline is focused unit coverage for trigger handling, STT/core turn or
 
 ## Development Notes
 
-- `pnpm dev` and `pnpm -C packages/core dev:watch` currently build `@herzen/dialog` once at startup.
-- When editing files under `packages/dialog/src`, rerun `pnpm --filter @herzen/dialog build` and restart the core dev process.
+- Core dev/start scripts run `scripts/ensure_workspace_builds.mjs` to auto-build stale `@herzen/dialog` and `@herzen/tts` artifacts before launch.
+- During an active dev session, changes under `packages/dialog/src` or `packages/tts/src` still require rebuild + process restart:
+  - `pnpm --filter @herzen/dialog build`
+  - `pnpm --filter @herzen/tts build`
 
 ---
 

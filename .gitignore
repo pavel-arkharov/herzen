@@ -5,6 +5,7 @@ coverage/
 .env
 .envrc
 .DS_Store
+.python-version
 
 # local-only artifacts
 data/
@@ -18,3 +19,18 @@ docs/audit/
 docs/skills/
 docs/tasks/
 docs/internal/
+
+# python local environments/caches
+.venv/
+venv/
+**/.venv/
+**/venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/

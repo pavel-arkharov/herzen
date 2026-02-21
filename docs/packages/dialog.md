@@ -1,31 +1,30 @@
 # Dialog Package (`@herzen/dialog`)
 
-This document describes the current scaffold of the local LLM response layer.
+This document describes the current local LLM dialog implementation.
 
 ---
 
 ## Role
 
-`@herzen/dialog` is the boundary between orchestration and LLM runtime.
+`@herzen/dialog` is the text-in/text-out reply boundary between `@herzen/core` and model runtimes.
 
 - input: transcript + language hints + timestamp + optional short-term context items
-- output: assistant reply text + metadata
+- output: assistant reply text + provider metadata
 
-`@herzen/core` should call this package and stay provider-agnostic.
+`@herzen/core` calls this package and remains provider-agnostic.
 
 ---
 
-## Current State
+## Current Implementation
 
 Implemented now:
 
-- package scaffold (`src`, `tests`, scripts, exports)
 - typed response domain model (`ResponseInput`, `ResponseOutput`, `ResponseError`)
-- provider selection surface (`HERZEN_RESPONSE_PROVIDER`)
-- Ollama config validation and local-only guardrails
-- Ollama provider generation path (`POST /api/chat`, `stream: false`)
+- provider selection surface (`HERZEN_RESPONSE_PROVIDER`, currently `ollama`)
+- Ollama config validation with local-only endpoint guardrails
+- non-streaming Ollama chat generation path (`POST /api/chat`, `stream: false`)
 - context message injection (`conversationContext`) before current user transcript
-- timeout/connection error mapping and output validation
+- timeout/connection error mapping and strict output validation
 
 Not implemented yet:
 
@@ -50,49 +49,19 @@ Local-only policy:
 
 ---
 
-## Ollama Setup (MVP)
+## Ollama Setup
 
-Recommended default model for this repo:
+Recommended default model in this repo:
 
 - `qwen2.5:3b`
 
-Install Ollama (macOS/Homebrew):
-
 ```bash
-brew install ollama
-```
-
-Verify CLI:
-
-```bash
-ollama --version
-```
-
-Pull model once:
-
-```bash
+ollama serve
 ollama pull qwen2.5:3b
-```
-
-Quick runtime check:
-
-```bash
-ollama run qwen2.5:3b "Say hello"
-```
-
-Monitor loaded model/process status:
-
-```bash
-ollama ps
-```
-
-Run Herzen with dialog package enabled:
-
-```bash
 HERZEN_OLLAMA_MODEL=qwen2.5:3b pnpm dev
 ```
 
-If local model warm-up is slow on first requests, increase timeout:
+If local model warm-up is slow on first requests:
 
 ```bash
 HERZEN_OLLAMA_MODEL=qwen2.5:3b HERZEN_RESPONSE_TIMEOUT_MS=60000 pnpm dev
@@ -100,13 +69,14 @@ HERZEN_OLLAMA_MODEL=qwen2.5:3b HERZEN_RESPONSE_TIMEOUT_MS=60000 pnpm dev
 
 ---
 
-## Public API (Scaffold)
+## Public API
 
 - `createResponseService(options?)`
 - `resolveResponseProvider(...)`
 - `resolveOllamaConfig(...)`
 - `createOllamaResponseService(...)`
 - `buildMvpSystemPrompt(...)`
+- `resolveResponseLanguage(...)`
 - `ResponseError` + `ResponseErrorCode`
 
 ---
@@ -117,9 +87,3 @@ HERZEN_OLLAMA_MODEL=qwen2.5:3b HERZEN_RESPONSE_TIMEOUT_MS=60000 pnpm dev
 - `RUNTIME_UNAVAILABLE`
 - `GENERATION_FAILED`
 - `OUTPUT_INVALID`
-
----
-
-## Next Step
-
-Extend beyond MVP reply generation (tools, memory, and richer response policies) while keeping local-first runtime guarantees.

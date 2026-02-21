@@ -126,7 +126,7 @@ The system must remain usable even if the entire repository is copied to a new m
 
 ## Current packages
 
-Seven packages are currently implemented: **audio**, **core**, **stt**, **tts**, **vad**, **wakeword**, and **response**.
+Seven packages are currently implemented: **audio**, **core**, **stt**, **tts**, **vad**, **wakeword**, and **dialog**.
 
 Notes:
 - `@herzen/dialog` currently supports local Ollama-backed MVP replies

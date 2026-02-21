@@ -102,8 +102,8 @@ Whisper requirement on Linux:
 
 Important Linux limitation right now:
 
-- `@herzen/tts` currently calls macOS `say`
-- On Linux, TTS is not officially supported yet in this repo
+- default TTS provider is macOS `say`, so default voice output path is not Linux-friendly
+- Linux users should treat TTS as advanced setup (`piper` or local `xtts` sidecar), untested in this repo
 - STT/file transcription can still be validated first; full voice reply flow may require local adaptation
 
 ---

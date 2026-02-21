@@ -279,11 +279,12 @@ This package is responsible for:
 
 Current status:
 
-- provider contract is implemented
+- typed provider contract and error model are implemented
 - Ollama provider is implemented (`POST /api/chat`, non-streaming)
+- optional short-term conversation context is injected before the current user transcript
 - core STT-success path consumes `@herzen/dialog` and speaks model reply text
 
-Current planned provider:
+Current provider:
 
 - `ollama` (local HTTP runtime)
 
