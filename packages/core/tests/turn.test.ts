@@ -30,6 +30,7 @@ function createDeps(overrides?: {
 	recordingMode?: "fixed" | "adaptive";
 	transcribeImpl?: (file: string) => Promise<{ text: string; language: string; durationMs: number }>;
 	recordAdaptiveImpl?: (file: string, config: unknown) => Promise<{ durationSeconds: number; stopReason: string }>;
+	playInputStartCueImpl?: () => Promise<void>;
 	isSttError?: (err: unknown) => err is SttErrorLike;
 	playAudioImpl?: (file: string) => Promise<void>;
 	speakImpl?: (text: string) => Promise<void>;
@@ -58,6 +59,7 @@ function createDeps(overrides?: {
 	const appendSttLog = vi.fn(async (entry: SttLogEntry) => {
 		void entry;
 	});
+	const playInputStartCue = overrides?.playInputStartCueImpl ?? vi.fn(async () => {});
 	const recordAudioFixed = vi.fn(async () => {});
 	const recordAudioAdaptive =
 		overrides?.recordAdaptiveImpl ??
@@ -100,6 +102,7 @@ function createDeps(overrides?: {
 		nowIso: () => "2026-02-14T00:00:00.000Z",
 		logger,
 		recordingMode: overrides?.recordingMode ?? "fixed",
+		playInputStartCue,
 		recordAudioFixed,
 		recordAudioAdaptive,
 		transcribeWav,
@@ -121,6 +124,7 @@ function createDeps(overrides?: {
 		logger,
 		now,
 		appendSttLog,
+		playInputStartCue,
 		recordAudioFixed,
 		recordAudioAdaptive,
 		playAudio,
@@ -140,6 +144,7 @@ describe("createSttTriggerHandler", () => {
 			deps,
 			logger,
 			appendSttLog,
+			playInputStartCue,
 			recordAudioFixed,
 			playAudio,
 			speak,
@@ -163,6 +168,7 @@ describe("createSttTriggerHandler", () => {
 
 		await handleTrigger();
 
+		expect(playInputStartCue).toHaveBeenCalledTimes(1);
 		expect(recordAudioFixed).toHaveBeenCalledWith("/tmp/audio/test-1000.wav", 5);
 		expect(playAudio).toHaveBeenCalledWith("/tmp/audio/test-1000.wav");
 		expect(generateResponse).toHaveBeenCalledWith({
@@ -340,7 +346,7 @@ describe("createSttTriggerHandler", () => {
 	});
 
 	it("suppresses no-speech fallback in follow-up mode", async () => {
-		const { deps, speak, onAssistantUtterance, appendSttLog } = createDeps({
+		const { deps, speak, onAssistantUtterance, appendSttLog, playInputStartCue } = createDeps({
 			transcribeImpl: async () => ({
 				text: " ",
 				language: "en",
@@ -356,6 +362,7 @@ describe("createSttTriggerHandler", () => {
 
 		expect(outcome.hasTranscript).toBe(false);
 		expect(outcome.assistantText).toBe("");
+		expect(playInputStartCue).not.toHaveBeenCalled();
 		expect(speak).not.toHaveBeenCalled();
 		expect(onAssistantUtterance).not.toHaveBeenCalled();
 		expect(appendSttLog).toHaveBeenCalledWith(

@@ -66,7 +66,8 @@ Shared contract for both repos:
 - [wakeword_sidecar_contract.md](./wakeword_sidecar_contract.md)
 
 When triggered, the core currently:
-- emits a short beep
+- emits a short start cue once per triggered interaction
+- when follow-up mode is enabled and a window closes, emits a distinct close cue
 - records audio into `data/audio` using selected recording mode:
   - fixed: `HERZEN_RECORD_SECONDS` (default `3`)
   - adaptive: VAD-based endpointing via `@herzen/audio` + `@herzen/vad`

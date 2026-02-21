@@ -296,9 +296,64 @@ export async function playAudio(file: string): Promise<void> {
 	await run("play", ["-q", file]);
 }
 
+interface CueToneOptions {
+	durationSeconds: number;
+	frequencyHz: number;
+	gainDb: number;
+	fadeInSeconds: number;
+	fadeOutSeconds: number;
+}
+
+async function playCueTone(options: CueToneOptions): Promise<void> {
+	const duration = options.durationSeconds.toFixed(3);
+	await run("play", [
+		"-q",
+		"-n",
+		"synth",
+		duration,
+		"sine",
+		String(options.frequencyHz),
+		"gain",
+		String(options.gainDb),
+		"fade",
+		"q",
+		options.fadeInSeconds.toFixed(3),
+		duration,
+		options.fadeOutSeconds.toFixed(3),
+	]);
+}
+
+export async function playInputStartCue(): Promise<void> {
+	// Softened start cue: shorter, lower gain, and shaped with a quick envelope.
+	await playCueTone({
+		durationSeconds: 0.14,
+		frequencyHz: 720,
+		gainDb: -14,
+		fadeInSeconds: 0.006,
+		fadeOutSeconds: 0.055,
+	});
+}
+
+export async function playConversationClosedCue(): Promise<void> {
+	// Two-note descending close cue so follow-up window end is audible but unobtrusive.
+	await playCueTone({
+		durationSeconds: 0.08,
+		frequencyHz: 620,
+		gainDb: -15,
+		fadeInSeconds: 0.005,
+		fadeOutSeconds: 0.03,
+	});
+	await playCueTone({
+		durationSeconds: 0.12,
+		frequencyHz: 460,
+		gainDb: -16,
+		fadeInSeconds: 0.005,
+		fadeOutSeconds: 0.05,
+	});
+}
+
 export async function beep(): Promise<void> {
-	// simple 200ms sine beep
-	await run("play", ["-q", "-n", "synth", "0.2", "sine", "880"]);
+	await playInputStartCue();
 }
 
 interface ResolvedAdaptiveRecordConfig {

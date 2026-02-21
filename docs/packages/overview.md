@@ -16,7 +16,7 @@ This package is responsible for:
 
 - recording audio from the system microphone
 - playing audio through system speakers
-- emitting simple audio signals (beeps)
+- emitting simple audio cues (start/close tones)
 
 It intentionally:
 
@@ -90,7 +90,8 @@ Current behavior (prototype):
 - supports dialog-journal toggle with `HERZEN_LOG_DIALOG` (default enabled)
 - supports markdown-journal toggle with `HERZEN_LOG_DIALOG_MARKDOWN` (default enabled)
 - sanitizes JSONL stream names and degrades logging sink failures to console warnings
-- emits a short beep
+- emits a short start cue once per triggered interaction
+- when follow-up mode is enabled and a window closes, emits a distinct close cue
 - records audio to `data/audio` in two modes:
   - fixed: `HERZEN_RECORD_SECONDS` (default `3`)
   - adaptive: VAD endpointing driven by:

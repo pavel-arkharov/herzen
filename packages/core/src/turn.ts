@@ -107,6 +107,7 @@ export interface TriggerTurnDependencies {
 		file: string,
 		config: AdaptiveRecordSettings,
 	) => Promise<AdaptiveRecordResultLike>;
+	playInputStartCue?: () => Promise<void>;
 	transcribeWav: (file: string) => Promise<SttResultLike>;
 	isSttError: (err: unknown) => err is SttErrorLike;
 	generateResponse?: (input: ResponseInputLike) => Promise<ResponseOutputLike>;
@@ -184,6 +185,14 @@ export async function runSttTurn(
 			? Math.min(recordSeconds, Math.max(MIN_RECORD_SECONDS, remainingWindowSeconds))
 			: recordSeconds;
 	const playbackEnabled = resolvePlaybackEnabled(env.HERZEN_PLAYBACK);
+
+	if (mode === "trigger") {
+		try {
+			await deps.playInputStartCue?.();
+		} catch (err) {
+			deps.logger.error("Start cue error:", err);
+		}
+	}
 
 	await recordTurnAudio(deps, file, env, effectiveRecordSeconds, {
 		mode,

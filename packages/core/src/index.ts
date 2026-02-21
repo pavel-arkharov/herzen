@@ -1,4 +1,10 @@
-import { recordWav, recordAdaptiveWav, playAudio, beep } from "@herzen/audio";
+import {
+	playConversationClosedCue,
+	playAudio,
+	playInputStartCue,
+	recordAdaptiveWav,
+	recordWav,
+} from "@herzen/audio";
 import { createResponseService } from "@herzen/dialog";
 import { transcribeWav, SttError } from "@herzen/stt";
 import { randomUUID } from "node:crypto";
@@ -215,13 +221,12 @@ function createHandleTrigger(
 		nowIso: () => new Date().toISOString(),
 		logger: sttTurnLogger,
 		recordingMode,
+		playInputStartCue,
 		recordAudioFixed: async (file, seconds) => {
-			await beep();
 			await recordWithProgress(file, seconds);
 		},
 		recordAudioAdaptive: async (file, config) => {
 			const env = getRuntimeEnv();
-			await beep();
 			return recordAdaptiveWav(file, {
 				...config,
 				modelPath: env.HERZEN_VAD_MODEL,
@@ -342,6 +347,11 @@ function createHandleTrigger(
 						reason: event.reason,
 						executedTurns: event.executedTurns,
 					});
+					try {
+						await playConversationClosedCue();
+					} catch (err) {
+						runtimeLogger.error("Follow-up close cue error:", err);
+					}
 				},
 			},
 		});

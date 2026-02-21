@@ -61,7 +61,15 @@ vi.mock("node:fs/promises", () => ({
 	writeFile: writeFileMock,
 }));
 
-import { AudioRecordError, beep, playAudio, recordAdaptiveWav, recordWav } from "../src/index.js";
+import {
+	AudioRecordError,
+	beep,
+	playAudio,
+	playConversationClosedCue,
+	playInputStartCue,
+	recordAdaptiveWav,
+	recordWav,
+} from "../src/index.js";
 
 function setupSpawn(): FakeChildProcess {
 	const child = new FakeChildProcess();
@@ -117,6 +125,89 @@ describe("audio command wrappers", () => {
 		child.emit("error", err);
 
 		await expect(pending).rejects.toBe(err);
+	});
+
+	it("plays a dampened start cue", async () => {
+		const child = setupSpawn();
+
+		const pending = playInputStartCue();
+		child.emit("exit", 0);
+
+		await expect(pending).resolves.toBeUndefined();
+		expect(spawnMock).toHaveBeenCalledWith(
+			"play",
+			[
+				"-q",
+				"-n",
+				"synth",
+				"0.140",
+				"sine",
+				"720",
+				"gain",
+				"-14",
+				"fade",
+				"q",
+				"0.006",
+				"0.140",
+				"0.055",
+			],
+			{ stdio: "inherit" },
+		);
+	});
+
+	it("plays a two-note close cue", async () => {
+		const childA = new FakeChildProcess();
+		const childB = new FakeChildProcess();
+		spawnMock.mockReturnValueOnce(childA).mockReturnValueOnce(childB);
+
+		const pending = playConversationClosedCue();
+		childA.emit("exit", 0);
+		while (spawnMock.mock.calls.length < 2) {
+			await Promise.resolve();
+		}
+		childB.emit("exit", 0);
+
+		await expect(pending).resolves.toBeUndefined();
+		expect(spawnMock).toHaveBeenNthCalledWith(
+			1,
+			"play",
+			[
+				"-q",
+				"-n",
+				"synth",
+				"0.080",
+				"sine",
+				"620",
+				"gain",
+				"-15",
+				"fade",
+				"q",
+				"0.005",
+				"0.080",
+				"0.030",
+			],
+			{ stdio: "inherit" },
+		);
+		expect(spawnMock).toHaveBeenNthCalledWith(
+			2,
+			"play",
+			[
+				"-q",
+				"-n",
+				"synth",
+				"0.120",
+				"sine",
+				"460",
+				"gain",
+				"-16",
+				"fade",
+				"q",
+				"0.005",
+				"0.120",
+				"0.050",
+			],
+			{ stdio: "inherit" },
+		);
 	});
 
 	it("adaptive recording stops on trailing silence after speech", async () => {
