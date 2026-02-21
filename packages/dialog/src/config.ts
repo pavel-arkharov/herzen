@@ -30,7 +30,7 @@ export function resolveOllamaConfig(env: NodeJS.ProcessEnv = process.env): Ollam
 	if (!model) {
 		throw new ResponseError(
 			"CONFIG_INVALID",
-			"HERZEN_OLLAMA_MODEL is required for @herzen/response when provider=ollama.",
+			"HERZEN_OLLAMA_MODEL is required for @herzen/dialog when provider=ollama.",
 		);
 	}
 

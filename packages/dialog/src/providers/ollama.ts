@@ -1,5 +1,6 @@
 import { resolveOllamaConfig } from "../config.js";
 import {
+	type ConversationContextItem,
 	ResponseError,
 	type ResponseLanguage,
 	type ResponseInput,
@@ -35,6 +36,7 @@ export function createOllamaResponseService(
 					temperature: config.temperature,
 					transcript,
 					systemPrompt: buildMvpSystemPrompt(input),
+					conversationContext: input.conversationContext,
 				});
 			} catch (err) {
 				if (err instanceof ResponseError) throw err;
@@ -98,10 +100,11 @@ interface RequestOllamaChatOptions {
 	temperature: number;
 	systemPrompt: string;
 	transcript: string;
+	conversationContext?: ConversationContextItem[];
 }
 
 interface OllamaChatMessage {
-	role: "system" | "user";
+	role: "system" | "user" | "assistant";
 	content: string;
 }
 
@@ -143,6 +146,7 @@ async function requestOllamaChat(options: RequestOllamaChatOptions): Promise<Res
 				role: "system",
 				content: options.systemPrompt,
 			},
+			...toContextMessages(options.conversationContext),
 			{
 				role: "user",
 				content: options.transcript,
@@ -168,6 +172,24 @@ async function requestOllamaChat(options: RequestOllamaChatOptions): Promise<Res
 	} finally {
 		clearTimeout(timer);
 	}
+}
+
+function toContextMessages(
+	conversationContext: ConversationContextItem[] | undefined,
+): Array<{ role: "user" | "assistant"; content: string }> {
+	if (!conversationContext || conversationContext.length === 0) return [];
+
+	const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+	for (const item of conversationContext) {
+		const content = item.text.trim();
+		if (!content) continue;
+		messages.push({
+			role: item.role,
+			content,
+		});
+	}
+
+	return messages;
 }
 
 function mapRequestError(

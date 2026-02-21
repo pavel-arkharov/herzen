@@ -2,11 +2,19 @@ export type ResponseProvider = "ollama";
 export type ResponseLanguage = "en" | "ru";
 export type RequestedResponseLanguage = "auto" | ResponseLanguage;
 
+export interface ConversationContextItem {
+	role: "user" | "assistant";
+	text: string;
+	language?: ResponseLanguage;
+	turn?: number;
+}
+
 export interface ResponseInput {
 	transcript: string;
 	detectedLanguage?: string;
 	requestedLanguage?: RequestedResponseLanguage;
 	timestampIso: string;
+	conversationContext?: ConversationContextItem[];
 }
 
 export interface ResponseOutput {

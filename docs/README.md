@@ -23,7 +23,7 @@ Related external repo:
 ## Packages
 
 - /Users/parkharo/Programming/herzen/docs/packages/overview.md
-- /Users/parkharo/Programming/herzen/docs/packages/response.md
+- /Users/parkharo/Programming/herzen/docs/packages/dialog.md
 - /Users/parkharo/Programming/herzen/docs/packages/stt.md
 - /Users/parkharo/Programming/herzen/docs/packages/tts.md
 - /Users/parkharo/Programming/herzen/docs/packages/vad.md

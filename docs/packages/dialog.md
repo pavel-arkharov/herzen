@@ -1,4 +1,4 @@
-# Response Package (`@herzen/response`)
+# Dialog Package (`@herzen/dialog`)
 
 This document describes the current scaffold of the local LLM response layer.
 
@@ -6,9 +6,9 @@ This document describes the current scaffold of the local LLM response layer.
 
 ## Role
 
-`@herzen/response` is the boundary between orchestration and LLM runtime.
+`@herzen/dialog` is the boundary between orchestration and LLM runtime.
 
-- input: transcript + language hints + timestamp
+- input: transcript + language hints + timestamp + optional short-term context items
 - output: assistant reply text + metadata
 
 `@herzen/core` should call this package and stay provider-agnostic.
@@ -24,12 +24,13 @@ Implemented now:
 - provider selection surface (`HERZEN_RESPONSE_PROVIDER`)
 - Ollama config validation and local-only guardrails
 - Ollama provider generation path (`POST /api/chat`, `stream: false`)
+- context message injection (`conversationContext`) before current user transcript
 - timeout/connection error mapping and output validation
 
 Not implemented yet:
 
 - tool/function calling
-- memory/tool context injection
+- persisted memory rehydration across process restarts
 - streaming token output
 
 ---
@@ -85,7 +86,7 @@ Monitor loaded model/process status:
 ollama ps
 ```
 
-Run Herzen with response package enabled:
+Run Herzen with dialog package enabled:
 
 ```bash
 HERZEN_OLLAMA_MODEL=qwen2.5:3b pnpm dev

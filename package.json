@@ -6,7 +6,7 @@
 		"build": "pnpm -r build",
 		"build:core": "pnpm --filter @herzen/core... build",
 		"build:audio": "pnpm --filter @herzen/audio build",
-		"build:response": "pnpm --filter @herzen/response build",
+		"build:dialog": "pnpm --filter @herzen/dialog build",
 		"transcribe:file": "pnpm --filter @herzen/stt build && pnpm --filter @herzen/stt transcribe:file",
 		"dev": "pnpm -C packages/core dev",
 		"start": "pnpm build:core && pnpm --filter @herzen/core start",
@@ -18,7 +18,7 @@
 		"test:stt": "pnpm --filter @herzen/stt test",
 		"test:tts": "pnpm --filter @herzen/tts test",
 		"test:wakeword": "pnpm --filter @herzen/wakeword test",
-		"test:response": "pnpm --filter @herzen/response test",
+		"test:dialog": "pnpm --filter @herzen/dialog test",
 		"lint": "pnpm -r lint",
 		"typecheck": "pnpm -r typecheck",
 		"clean": "pnpm -r clean"

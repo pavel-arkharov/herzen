@@ -12,7 +12,7 @@ Current test scope is unit tests for the monorepo packages:
 - `/Users/parkharo/Programming/herzen/packages/tts`
 - `/Users/parkharo/Programming/herzen/packages/vad`
 - `/Users/parkharo/Programming/herzen/packages/wakeword`
-- `/Users/parkharo/Programming/herzen/packages/response`
+- `/Users/parkharo/Programming/herzen/packages/dialog`
 
 Primary goals:
 
@@ -39,7 +39,7 @@ Tests live in `tests/` folders inside each package:
 - `/Users/parkharo/Programming/herzen/packages/tts/tests`
 - `/Users/parkharo/Programming/herzen/packages/vad/tests`
 - `/Users/parkharo/Programming/herzen/packages/wakeword/tests`
-- `/Users/parkharo/Programming/herzen/packages/response/tests`
+- `/Users/parkharo/Programming/herzen/packages/dialog/tests`
 
 Naming convention:
 
@@ -71,7 +71,7 @@ pnpm test:audio
 pnpm test:stt
 pnpm test:tts
 pnpm test:wakeword
-pnpm test:response
+pnpm test:dialog
 pnpm --filter @herzen/vad test
 
 # quality gates used alongside tests
@@ -87,7 +87,7 @@ Optional package-local execution (from package directory):
 - `/Users/parkharo/Programming/herzen/packages/tts`: `pnpm test`
 - `/Users/parkharo/Programming/herzen/packages/vad`: `pnpm test`
 - `/Users/parkharo/Programming/herzen/packages/wakeword`: `pnpm test`
-- `/Users/parkharo/Programming/herzen/packages/response`: `pnpm test`
+- `/Users/parkharo/Programming/herzen/packages/dialog`: `pnpm test`
 
 ## Test design guidance
 

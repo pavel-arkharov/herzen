@@ -29,7 +29,7 @@ Herzen is a local voice assistant monorepo with these packages:
 - `@herzen/tts`: text-to-speech
 - `@herzen/vad`: voice activity detection for adaptive recording
 - `@herzen/wakeword`: wakeword client (sidecar integration)
-- `@herzen/response`: local LLM response service (Ollama provider)
+- `@herzen/dialog`: local LLM dialog service (Ollama provider)
 
 ---
 
@@ -304,7 +304,7 @@ pnpm test:audio
 pnpm test:stt
 pnpm test:tts
 pnpm test:wakeword
-pnpm test:response
+pnpm test:dialog
 pnpm --filter @herzen/vad test
 ```
 

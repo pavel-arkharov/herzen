@@ -80,7 +80,7 @@ When triggered, the core currently:
   - invalid adaptive config falls back to fixed recording for that turn
   - adaptive runtime failures also fall back to fixed recording for that turn
 - runs local STT via `@herzen/stt` (`transcribeWav`)
-- generates local LLM replies via `@herzen/response` (Ollama provider)
+- generates local LLM replies via `@herzen/dialog` (Ollama provider)
 - appends one structured STT event per trigger to `data/logs/stt.jsonl`
 - optionally plays the recorded file when `HERZEN_PLAYBACK=1`
 - speaks model-generated reply text when available, else a short fallback
@@ -129,7 +129,7 @@ The system must remain usable even if the entire repository is copied to a new m
 Seven packages are currently implemented: **audio**, **core**, **stt**, **tts**, **vad**, **wakeword**, and **response**.
 
 Notes:
-- `@herzen/response` currently supports local Ollama-backed MVP replies
+- `@herzen/dialog` currently supports local Ollama-backed MVP replies
 - advanced response features (tools/memory/streaming) are intentionally deferred
 
 More will be added later without breaking these.

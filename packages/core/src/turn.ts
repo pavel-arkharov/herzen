@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import type { ConversationContextItem } from "@herzen/dialog";
 import type { RecordingMode } from "./recording/factory.js";
 
 const DEFAULT_RECORD_SECONDS = 3;
@@ -49,6 +50,7 @@ export interface ResponseInputLike {
 	detectedLanguage?: string;
 	requestedLanguage?: RequestedResponseLanguage;
 	timestampIso: string;
+	conversationContext?: ConversationContextItem[];
 }
 
 export interface ResponseOutputLike {
@@ -62,6 +64,29 @@ export interface ResponseOutputLike {
 export interface ResponseErrorLike {
 	code: string;
 	message: string;
+}
+
+export interface UserUtteranceRecord {
+	turn: number;
+	text: string;
+	detectedLanguage?: string;
+	requestedLanguage?: RequestedResponseLanguage;
+}
+
+export interface AssistantUtteranceRecord {
+	turn: number;
+	text: string;
+	language?: "en" | "ru";
+	provider?: string;
+	model?: string;
+}
+
+export interface TurnErrorRecord {
+	turn: number;
+	stage: "stt" | "response" | "telemetry";
+	code?: string;
+	message: string;
+	details?: Record<string, unknown>;
 }
 
 export interface TurnLogger {
@@ -85,7 +110,12 @@ export interface TriggerTurnDependencies {
 	isSttError: (err: unknown) => err is SttErrorLike;
 	generateResponse?: (input: ResponseInputLike) => Promise<ResponseOutputLike>;
 	isResponseError?: (err: unknown) => err is ResponseErrorLike;
+	getConversationContext?: () => ConversationContextItem[];
+	onTurnOutcome?: (outcome: TurnOutcome) => Promise<void> | void;
 	appendSttLog: (entry: SttLogEntry) => Promise<void>;
+	onUserUtterance?: (event: UserUtteranceRecord) => Promise<void> | void;
+	onAssistantUtterance?: (event: AssistantUtteranceRecord) => Promise<void> | void;
+	onError?: (event: TurnErrorRecord) => Promise<void> | void;
 	playAudio: (file: string) => Promise<void>;
 	speak: (text: string) => Promise<void>;
 }
@@ -105,123 +135,222 @@ export interface AdaptiveRecordResultLike {
 	stopReason: string;
 }
 
+export interface TurnOutcome {
+	turn: number;
+	hasTranscript: boolean;
+	transcript?: string;
+	detectedLanguage?: string;
+	assistantText: string;
+	assistantLanguage?: "en" | "ru";
+	assistantSource: "model" | "fallback";
+	llmOutcome?: "ok" | "error";
+}
+
 export function createSttTriggerHandler(deps: TriggerTurnDependencies): () => Promise<void> {
+	let turn = 0;
+
 	return async () => {
-		const env = deps.getEnv();
-		const file = join(deps.outDir, `test-${deps.now()}.wav`);
-		const languageMode = resolveSttLanguageMode(env.HERZEN_STT_LANGUAGE);
-		const requestedLanguage = resolveRequestedResponseLanguage(languageMode);
-		const recordSeconds = resolveRecordSeconds(env.HERZEN_RECORD_SECONDS, deps.logger);
-		const playbackEnabled = resolvePlaybackEnabled(env.HERZEN_PLAYBACK);
+		const outcome = await runSttTurn(deps, ++turn);
+		await executeJournalHook(deps.logger, "Failed to process turn outcome hook", () =>
+			deps.onTurnOutcome?.(outcome),
+		);
+	};
+}
 
-		await recordTurnAudio(deps, file, env, recordSeconds);
+export async function runSttTurn(
+	deps: TriggerTurnDependencies,
+	turnNumber: number,
+): Promise<TurnOutcome> {
+	const env = deps.getEnv();
+	const file = join(deps.outDir, `test-${deps.now()}.wav`);
+	const languageMode = resolveSttLanguageMode(env.HERZEN_STT_LANGUAGE);
+	const requestedLanguage = resolveRequestedResponseLanguage(languageMode);
+	const recordSeconds = resolveRecordSeconds(env.HERZEN_RECORD_SECONDS, deps.logger);
+	const playbackEnabled = resolvePlaybackEnabled(env.HERZEN_PLAYBACK);
 
-		let latencyMs: number;
-		let durationMs: number;
-		let transcript = "";
-		let language = "auto";
-		let errorCode: string | undefined;
-		let llmProvider: string | undefined;
-		let llmModel: string | undefined;
-		let llmLatencyMs: number | undefined;
-		let llmOutcome: "ok" | "error" | undefined;
-		let llmErrorCode: string | undefined;
-		let speechText = FALLBACK_SPEECH;
-		const sttStart = deps.now();
+	await recordTurnAudio(deps, file, env, recordSeconds);
 
-		try {
-			const sttResult = await deps.transcribeWav(file);
-			latencyMs = sttResult.durationMs;
-			durationMs = sttResult.durationMs;
-			transcript = sttResult.text.trim();
-			language = sttResult.language;
-			if (transcript) {
-				const detected = detectedLanguageLabel(transcript, language);
-				deps.logger.log(`[${detected} detected]`);
-			} else {
-				deps.logger.log("[no speech detected]");
-			}
-		} catch (err) {
-			latencyMs = deps.now() - sttStart;
-			durationMs = latencyMs;
-			if (deps.isSttError(err)) {
-				errorCode = err.code;
-				deps.logger.error(`STT error (${err.code}): ${err.message}`);
-			} else {
-				errorCode = "UNKNOWN";
-				deps.logger.error("STT error:", err);
-			}
-		}
+	let latencyMs: number;
+	let durationMs: number;
+	let transcript = "";
+	let language = "auto";
+	let errorCode: string | undefined;
+	let llmProvider: string | undefined;
+	let llmModel: string | undefined;
+	let llmLatencyMs: number | undefined;
+	let llmOutcome: "ok" | "error" | undefined;
+	let llmErrorCode: string | undefined;
+	let speechText = FALLBACK_SPEECH;
+	let speechLanguage: "en" | "ru" = "en";
+	let assistantSource: "model" | "fallback" = "fallback";
+	const sttStart = deps.now();
+
+	try {
+		const sttResult = await deps.transcribeWav(file);
+		latencyMs = sttResult.durationMs;
+		durationMs = sttResult.durationMs;
+		transcript = sttResult.text.trim();
+		language = sttResult.language;
 
 		if (transcript) {
-			if (deps.generateResponse) {
-				const responseStartedAt = deps.now();
-				try {
-					const response = await deps.generateResponse({
-						transcript,
-						detectedLanguage: language,
-						requestedLanguage,
-						timestampIso: deps.nowIso(),
-					});
-					const responseText = response.text.trim();
-					if (!responseText) {
-						throw createOutputInvalidResponseError();
-					}
-
-					speechText = responseText;
-					llmProvider = response.provider;
-					llmModel = response.model;
-					llmLatencyMs = response.durationMs;
-					llmOutcome = "ok";
-				} catch (err) {
-					llmLatencyMs = deps.now() - responseStartedAt;
-					llmOutcome = "error";
-					llmErrorCode = resolveResponseErrorCode(err, deps.isResponseError);
-					speechText = responseUnavailableSpeech(transcript, language);
-					if (isResponseError(err, deps.isResponseError)) {
-						deps.logger.error(`LLM response error (${err.code}): ${err.message}`);
-					} else {
-						deps.logger.error("LLM response error:", err);
-					}
-				}
-			} else {
-				llmOutcome = "error";
-				llmErrorCode = FALLBACK_RESPONSE_ERROR_CODE;
-				speechText = responseUnavailableSpeech(transcript, language);
-				deps.logger.error("LLM response service unavailable.");
-			}
-		}
-
-		try {
-			await deps.appendSttLog({
-				timestamp: deps.nowIso(),
-				audioFile: file,
-				durationMs,
-				latencyMs,
-				languageMode,
-				language,
-				transcript: transcript || undefined,
-				errorCode,
-				llmProvider,
-				llmModel,
-				llmLatencyMs,
-				llmOutcome,
-				llmErrorCode,
-			});
-		} catch (err) {
-			deps.logger.error("Failed to write STT log:", err);
-		}
-
-		if (playbackEnabled) {
-			deps.logger.log("Playing back…");
-			await deps.playAudio(file);
+			const detected = detectedLanguageLabel(transcript, language);
+			deps.logger.log(`[${detected} detected]`);
+			scheduleJournalHook(deps.logger, "Failed to write user utterance journal event", () =>
+				deps.onUserUtterance?.({
+					turn: turnNumber,
+					text: transcript,
+					detectedLanguage: language,
+					requestedLanguage,
+				}),
+			);
 		} else {
-			deps.logger.log("Playback skipped. Set HERZEN_PLAYBACK=1 to enable.");
+			deps.logger.log("[no speech detected]");
 		}
+	} catch (err) {
+		latencyMs = deps.now() - sttStart;
+		durationMs = latencyMs;
+		if (deps.isSttError(err)) {
+			errorCode = err.code;
+			deps.logger.error(`STT error (${err.code}): ${err.message}`);
+		} else {
+			errorCode = "UNKNOWN";
+			deps.logger.error("STT error:", err);
+		}
+		await executeJournalHook(deps.logger, "Failed to write STT error journal event", () =>
+			deps.onError?.({
+				turn: turnNumber,
+				stage: "stt",
+				code: errorCode,
+				message: errorMessage(err, "Unknown STT error."),
+			}),
+		);
+	}
 
-		await deps.speak(speechText);
+	if (transcript) {
+		if (deps.generateResponse) {
+			const responseStartedAt = deps.now();
+			try {
+				const responseInput: ResponseInputLike = {
+					transcript,
+					detectedLanguage: language,
+					requestedLanguage,
+					timestampIso: deps.nowIso(),
+				};
+				const conversationContext = deps.getConversationContext?.();
+				if (conversationContext && conversationContext.length > 0) {
+					responseInput.conversationContext = conversationContext;
+				}
 
-		deps.logger.log("Done:", file);
+				const response = await deps.generateResponse(responseInput);
+				const responseText = response.text.trim();
+				if (!responseText) {
+					throw createOutputInvalidResponseError();
+				}
+
+				speechText = responseText;
+				speechLanguage = response.language;
+				llmProvider = response.provider;
+				llmModel = response.model;
+				llmLatencyMs = response.durationMs;
+				llmOutcome = "ok";
+				assistantSource = "model";
+			} catch (err) {
+				llmLatencyMs = deps.now() - responseStartedAt;
+				llmOutcome = "error";
+				llmErrorCode = resolveResponseErrorCode(err, deps.isResponseError);
+				speechText = responseUnavailableSpeech(transcript, language);
+				speechLanguage = responseUnavailableLanguage(transcript, language);
+				assistantSource = "fallback";
+				if (isResponseError(err, deps.isResponseError)) {
+					deps.logger.error(`LLM response error (${err.code}): ${err.message}`);
+				} else {
+					deps.logger.error("LLM response error:", err);
+				}
+				await executeJournalHook(deps.logger, "Failed to write response error journal event", () =>
+					deps.onError?.({
+						turn: turnNumber,
+						stage: "response",
+						code: llmErrorCode,
+						message: errorMessage(err, "Unknown response error."),
+					}),
+				);
+			}
+		} else {
+			llmOutcome = "error";
+			llmErrorCode = FALLBACK_RESPONSE_ERROR_CODE;
+			speechText = responseUnavailableSpeech(transcript, language);
+			speechLanguage = responseUnavailableLanguage(transcript, language);
+			assistantSource = "fallback";
+			deps.logger.error("LLM response service unavailable.");
+			await executeJournalHook(deps.logger, "Failed to write response unavailable journal event", () =>
+				deps.onError?.({
+					turn: turnNumber,
+					stage: "response",
+					code: llmErrorCode,
+					message: "LLM response service unavailable.",
+				}),
+			);
+		}
+	}
+
+	try {
+		await deps.appendSttLog({
+			timestamp: deps.nowIso(),
+			audioFile: file,
+			durationMs,
+			latencyMs,
+			languageMode,
+			language,
+			transcript: transcript || undefined,
+			errorCode,
+			llmProvider,
+			llmModel,
+			llmLatencyMs,
+			llmOutcome,
+			llmErrorCode,
+		});
+	} catch (err) {
+		deps.logger.error("Failed to write STT log:", err);
+		await executeJournalHook(deps.logger, "Failed to write telemetry error journal event", () =>
+			deps.onError?.({
+				turn: turnNumber,
+				stage: "telemetry",
+				message: "Failed to write STT telemetry log.",
+				details: {
+					error: errorMessage(err, "Unknown telemetry write error."),
+				},
+			}),
+		);
+	}
+
+	if (playbackEnabled) {
+		deps.logger.log("Playing back…");
+		await deps.playAudio(file);
+	} else {
+		deps.logger.log("Playback skipped. Set HERZEN_PLAYBACK=1 to enable.");
+	}
+
+	scheduleJournalHook(deps.logger, "Failed to write assistant utterance journal event", () =>
+		deps.onAssistantUtterance?.({
+			turn: turnNumber,
+			text: speechText,
+			language: speechLanguage,
+			provider: llmProvider,
+			model: llmModel,
+		}),
+	);
+	await deps.speak(speechText);
+	deps.logger.log("Done:", file);
+
+	return {
+		turn: turnNumber,
+		hasTranscript: transcript.length > 0,
+		transcript: transcript || undefined,
+		detectedLanguage: transcript ? language : undefined,
+		assistantText: speechText,
+		assistantLanguage: speechLanguage,
+		assistantSource,
+		llmOutcome,
 	};
 }
 
@@ -423,12 +552,46 @@ function hasCyrillic(text: string): boolean {
 	return /[А-Яа-яЁё]/.test(text);
 }
 
+function responseUnavailableLanguage(transcript: string, language: string): "en" | "ru" {
+	return detectedLanguageLabel(transcript, language);
+}
+
 function responseUnavailableSpeech(transcript: string, language: string): string {
-	if (detectedLanguageLabel(transcript, language) === "ru") return RESPONSE_FALLBACK_SPEECH_RU;
+	if (responseUnavailableLanguage(transcript, language) === "ru") return RESPONSE_FALLBACK_SPEECH_RU;
 	return RESPONSE_FALLBACK_SPEECH_EN;
 }
 
 function detectedLanguageLabel(transcript: string, language: string): "en" | "ru" {
 	if (language.toLowerCase().startsWith("ru") || hasCyrillic(transcript)) return "ru";
 	return "en";
+}
+
+function errorMessage(err: unknown, fallback: string): string {
+	if (err instanceof Error && err.message.trim()) return err.message;
+	if (typeof err === "object" && err !== null && "message" in err) {
+		const message = (err as { message?: unknown }).message;
+		if (typeof message === "string" && message.trim()) return message;
+	}
+	return fallback;
+}
+
+async function executeJournalHook(
+	logger: TurnLogger,
+	failureMessage: string,
+	callback: (() => Promise<void> | void) | undefined,
+): Promise<void> {
+	if (!callback) return;
+	try {
+		await callback();
+	} catch (err) {
+		logger.error(`${failureMessage}:`, err);
+	}
+}
+
+function scheduleJournalHook(
+	logger: TurnLogger,
+	failureMessage: string,
+	callback: (() => Promise<void> | void) | undefined,
+): void {
+	void executeJournalHook(logger, failureMessage, callback);
 }

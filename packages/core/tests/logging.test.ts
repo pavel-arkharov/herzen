@@ -81,6 +81,38 @@ describe("createLogger", () => {
 		}
 	});
 
+	it("includes sessionId on runtime entries when configured", async () => {
+		const logsDir = await mkdtemp(join(tmpdir(), "herzen-logs-session-"));
+		const consoleTarget = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+		try {
+			const logger = createLogger({
+				logsDir,
+				component: "core",
+				sessionId: "session-abc",
+				consoleTarget,
+				nowIso: () => "2026-02-14T00:00:00.000Z",
+			});
+
+			logger.info("core.started", { message: "boot" });
+			await logger.drain();
+
+			const entries = await readJsonl(join(logsDir, "runtime.jsonl"));
+			expect(entries).toEqual([
+				{
+					ts: "2026-02-14T00:00:00.000Z",
+					level: "info",
+					component: "core",
+					event: "core.started",
+					sessionId: "session-abc",
+					message: "boot",
+				},
+			]);
+		} finally {
+			await rm(logsDir, { recursive: true, force: true });
+		}
+	});
+
 	it("rejects invalid stream names to prevent path escape", async () => {
 		const parentDir = await mkdtemp(join(tmpdir(), "herzen-logs-stream-"));
 		const logsDir = join(parentDir, "logs");
@@ -140,7 +172,7 @@ describe("createLogger", () => {
 });
 
 describe("toStructuredSttTurnEntry", () => {
-	it("gates transcript field based on transcriptEnabled", () => {
+	it("omits transcript and audio path by default", () => {
 		const baseEntry = {
 			timestamp: "2026-02-14T00:00:00.000Z",
 			audioFile: "/tmp/audio/test.wav",
@@ -159,7 +191,6 @@ describe("toStructuredSttTurnEntry", () => {
 			component: "stt",
 			event: "stt.turn",
 			fields: {
-				audioFile: "/tmp/audio/test.wav",
 				latencyMs: 250,
 				durationMs: 222,
 				languageMode: "auto",
@@ -167,9 +198,41 @@ describe("toStructuredSttTurnEntry", () => {
 			},
 		});
 		expect(withoutTranscript.fields).not.toHaveProperty("transcript");
+		expect(withoutTranscript.fields).not.toHaveProperty("audioFile");
 
 		const withTranscript = toStructuredSttTurnEntry(baseEntry, { transcriptEnabled: true });
 		expect(withTranscript.fields).toHaveProperty("transcript", "hello world");
+		expect(withTranscript.fields).not.toHaveProperty("audioFile");
+	});
+
+	it("includes audio path only when audioInputEnabled is true", () => {
+		const entry = toStructuredSttTurnEntry(
+			{
+				timestamp: "2026-02-14T00:00:00.000Z",
+				audioFile: "/tmp/audio/test.wav",
+				durationMs: 222,
+				latencyMs: 250,
+				languageMode: "auto",
+			},
+			{ transcriptEnabled: false, audioInputEnabled: true },
+		);
+
+		expect(entry.fields).toHaveProperty("audioFile", "/tmp/audio/test.wav");
+	});
+
+	it("includes sessionId on stt entries when provided", () => {
+		const entry = toStructuredSttTurnEntry(
+			{
+				timestamp: "2026-02-14T00:00:00.000Z",
+				audioFile: "/tmp/audio/test.wav",
+				durationMs: 222,
+				latencyMs: 250,
+				languageMode: "auto",
+			},
+			{ transcriptEnabled: false, sessionId: "session-abc" },
+		);
+
+		expect(entry.sessionId).toBe("session-abc");
 	});
 
 	it("marks llm failures as error level even without STT error code", () => {

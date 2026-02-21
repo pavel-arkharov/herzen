@@ -4,7 +4,15 @@ import {
 	type ResponseErrorLike,
 	type SttErrorLike,
 	type SttLogEntry,
+	type TurnOutcome,
 } from "../src/turn.js";
+
+interface ContextItem {
+	role: "user" | "assistant";
+	text: string;
+	language?: "en" | "ru";
+	turn?: number;
+}
 
 function createNowMock(sequence: number[]) {
 	let idx = 0;
@@ -27,6 +35,7 @@ function createDeps(overrides?: {
 		detectedLanguage?: string;
 		requestedLanguage?: "auto" | "en" | "ru";
 		timestampIso: string;
+		conversationContext?: ContextItem[];
 	}) => Promise<{
 		text: string;
 		language: "en" | "ru";
@@ -35,6 +44,8 @@ function createDeps(overrides?: {
 		durationMs: number;
 	}>;
 	isResponseError?: (err: unknown) => err is ResponseErrorLike;
+	conversationContext?: ContextItem[];
+	onTurnOutcome?: (outcome: TurnOutcome) => Promise<void> | void;
 }) {
 	const logger = {
 		log: vi.fn(),
@@ -53,6 +64,11 @@ function createDeps(overrides?: {
 		}));
 	const playAudio = vi.fn(async () => {});
 	const speak = vi.fn(async () => {});
+	const onUserUtterance = vi.fn(async () => {});
+	const onAssistantUtterance = vi.fn(async () => {});
+	const onError = vi.fn(async () => {});
+	const onTurnOutcome = overrides?.onTurnOutcome ?? vi.fn(async () => {});
+	const getConversationContext = vi.fn(() => overrides?.conversationContext ?? []);
 	const transcribeWav =
 		overrides?.transcribeImpl ??
 		(async () => ({ text: "hello there", language: "en", durationMs: 321 }));
@@ -87,7 +103,12 @@ function createDeps(overrides?: {
 		isSttError,
 		generateResponse,
 		isResponseError,
+		getConversationContext,
+		onTurnOutcome,
 		appendSttLog,
+		onUserUtterance,
+		onAssistantUtterance,
+		onError,
 		playAudio,
 		speak,
 	};
@@ -101,13 +122,29 @@ function createDeps(overrides?: {
 		recordAudioAdaptive,
 		playAudio,
 		speak,
+		onUserUtterance,
+		onAssistantUtterance,
+		onError,
+		onTurnOutcome,
 		generateResponse,
+		getConversationContext,
 	};
 }
 
 describe("createSttTriggerHandler", () => {
 	it("handles successful STT result and speaks model reply", async () => {
-		const { deps, logger, appendSttLog, recordAudioFixed, playAudio, speak, generateResponse } = createDeps({
+		const {
+			deps,
+			logger,
+			appendSttLog,
+			recordAudioFixed,
+			playAudio,
+			speak,
+			generateResponse,
+			onUserUtterance,
+			onAssistantUtterance,
+			onTurnOutcome,
+		} = createDeps({
 			env: {
 				HERZEN_STT_LANGUAGE: "en",
 				HERZEN_RECORD_SECONDS: "5",
@@ -131,6 +168,21 @@ describe("createSttTriggerHandler", () => {
 			requestedLanguage: "en",
 			timestampIso: "2026-02-14T00:00:00.000Z",
 		});
+		expect(onUserUtterance).toHaveBeenCalledWith({
+			turn: 1,
+			text: "hello world",
+			detectedLanguage: "en",
+			requestedLanguage: "en",
+		});
+		expect(onAssistantUtterance).toHaveBeenCalledWith(
+			expect.objectContaining({
+				turn: 1,
+				text: "Model reply",
+				language: "en",
+				provider: "ollama",
+				model: "qwen2.5:3b",
+			}),
+		);
 		expect(speak).toHaveBeenCalledWith("Model reply");
 		expect(logger.log).toHaveBeenCalledWith("[en detected]");
 		expect(appendSttLog).toHaveBeenCalledWith({
@@ -148,11 +200,50 @@ describe("createSttTriggerHandler", () => {
 			llmOutcome: "ok",
 			llmErrorCode: undefined,
 		});
+		expect(onTurnOutcome).toHaveBeenCalledWith({
+			turn: 1,
+			hasTranscript: true,
+			transcript: "hello world",
+			detectedLanguage: "en",
+			assistantText: "Model reply",
+			assistantLanguage: "en",
+			assistantSource: "model",
+			llmOutcome: "ok",
+		});
+	});
+
+	it("passes conversation context into response generation when available", async () => {
+		const { deps, generateResponse, getConversationContext } = createDeps({
+			transcribeImpl: async () => ({
+				text: "What is my name?",
+				language: "en",
+				durationMs: 110,
+			}),
+			conversationContext: [
+				{ role: "user", text: "My name is Pavel.", turn: 1 },
+				{ role: "assistant", text: "Nice to meet you, Pavel.", turn: 1 },
+			],
+		});
+
+		const handleTrigger = createSttTriggerHandler(deps);
+		await handleTrigger();
+
+		expect(getConversationContext).toHaveBeenCalledTimes(1);
+		expect(generateResponse).toHaveBeenCalledWith({
+			transcript: "What is my name?",
+			detectedLanguage: "en",
+			requestedLanguage: "auto",
+			timestampIso: "2026-02-14T00:00:00.000Z",
+			conversationContext: [
+				{ role: "user", text: "My name is Pavel.", turn: 1 },
+				{ role: "assistant", text: "Nice to meet you, Pavel.", turn: 1 },
+			],
+		});
 	});
 
 	it("uses fallback speech when response generation fails", async () => {
 		const responseErr = { code: "RUNTIME_UNAVAILABLE", message: "Ollama unavailable" };
-		const { deps, logger, appendSttLog, speak } = createDeps({
+		const { deps, logger, appendSttLog, speak, onError, onAssistantUtterance, onTurnOutcome } = createDeps({
 			nowSequence: [2_000, 2_100, 2_400, 2_700],
 			transcribeImpl: async () => ({
 				text: "hello world",
@@ -169,12 +260,32 @@ describe("createSttTriggerHandler", () => {
 		await handleTrigger();
 
 		expect(logger.error).toHaveBeenCalledWith("LLM response error (RUNTIME_UNAVAILABLE): Ollama unavailable");
+		expect(onError).toHaveBeenCalledWith({
+			turn: 1,
+			stage: "response",
+			code: "RUNTIME_UNAVAILABLE",
+			message: "Ollama unavailable",
+		});
+		expect(onAssistantUtterance).toHaveBeenCalledWith(
+			expect.objectContaining({
+				turn: 1,
+				text: "[en] I heard you, but I can't respond right now.",
+				language: "en",
+			}),
+		);
 		expect(speak).toHaveBeenCalledWith("[en] I heard you, but I can't respond right now.");
 		expect(appendSttLog).toHaveBeenCalledWith(
 			expect.objectContaining({
 				llmOutcome: "error",
 				llmErrorCode: "RUNTIME_UNAVAILABLE",
 				llmLatencyMs: 300,
+			}),
+		);
+		expect(onTurnOutcome).toHaveBeenCalledWith(
+			expect.objectContaining({
+				assistantSource: "fallback",
+				llmOutcome: "error",
+				transcript: "hello world",
 			}),
 		);
 	});
@@ -227,7 +338,7 @@ describe("createSttTriggerHandler", () => {
 
 	it("records typed STT error code and continues to fallback speech", async () => {
 		const sttErr = { code: "MODEL_MISSING", message: "Model file missing" };
-		const { deps, logger, appendSttLog, speak } = createDeps({
+		const { deps, logger, appendSttLog, speak, onError } = createDeps({
 			nowSequence: [3_000, 3_500, 3_800],
 			transcribeImpl: async () => {
 				throw sttErr;
@@ -239,6 +350,12 @@ describe("createSttTriggerHandler", () => {
 		await handleTrigger();
 
 		expect(logger.error).toHaveBeenCalledWith("STT error (MODEL_MISSING): Model file missing");
+		expect(onError).toHaveBeenCalledWith({
+			turn: 1,
+			stage: "stt",
+			code: "MODEL_MISSING",
+			message: "Model file missing",
+		});
 		expect(appendSttLog).toHaveBeenCalledWith(
 			expect.objectContaining({
 				durationMs: 300,

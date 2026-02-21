@@ -11,6 +11,7 @@ export interface StructuredLogEntry {
 	level: LogLevel;
 	component: LogComponent;
 	event: string;
+	sessionId?: string;
 	message?: string;
 	fields?: Record<string, unknown>;
 }
@@ -20,6 +21,7 @@ export interface LoggerConfig {
 	component: LogComponent;
 	level?: string | undefined;
 	logTranscript?: string | undefined;
+	sessionId?: string | undefined;
 	nowIso?: () => string;
 	consoleTarget?: Pick<Console, "log" | "warn" | "error">;
 }
@@ -106,16 +108,20 @@ function sanitizeStreamName(streamName: string): string | null {
 
 export function toStructuredSttTurnEntry(
 	entry: SttLogEntry,
-	options: { transcriptEnabled: boolean },
+	options: {
+		transcriptEnabled: boolean;
+		audioInputEnabled?: boolean;
+		sessionId?: string;
+	},
 ): StructuredLogEntry {
 	const isErrorLevel = Boolean(entry.errorCode) || entry.llmOutcome === "error";
 	const fields: Record<string, unknown> = {
-		audioFile: entry.audioFile,
 		latencyMs: entry.latencyMs,
 		durationMs: entry.durationMs,
 		languageMode: entry.languageMode,
 	};
 
+	if (options.audioInputEnabled && entry.audioFile) fields.audioFile = entry.audioFile;
 	if (entry.language) fields.detectedLanguage = entry.language;
 	if (entry.errorCode) fields.errorCode = entry.errorCode;
 	if (entry.llmProvider) fields.llmProvider = entry.llmProvider;
@@ -130,6 +136,7 @@ export function toStructuredSttTurnEntry(
 		level: isErrorLevel ? "error" : "info",
 		component: "stt",
 		event: "stt.turn",
+		sessionId: options.sessionId,
 		fields,
 	};
 }
@@ -180,6 +187,7 @@ export function createLogger(config: LoggerConfig): Logger {
 				level: entryLevel,
 				component: config.component,
 				event,
+				sessionId: config.sessionId,
 				message,
 				fields,
 			};

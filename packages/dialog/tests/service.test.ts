@@ -80,6 +80,52 @@ describe("createResponseService", () => {
 		expect(body.messages[1]?.content).toBe("Turn on the hallway lights.");
 	});
 
+	it("injects conversation context before the current user message", async () => {
+		const fetchMock = vi.fn(async () => {
+			return new Response(
+				JSON.stringify({
+					message: {
+						role: "assistant",
+						content: "Sure.",
+					},
+				}),
+				{ status: 200 },
+			);
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const service = createResponseService({ env: BASE_ENV });
+		await service.generateReply({
+			transcript: "What is my name?",
+			detectedLanguage: "en",
+			timestampIso: "2026-02-19T12:00:00.000Z",
+			conversationContext: [
+				{
+					role: "user",
+					text: "My name is Pavel.",
+					turn: 1,
+				},
+				{
+					role: "assistant",
+					text: "Nice to meet you, Pavel.",
+					turn: 1,
+				},
+			],
+		});
+
+		const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		const body = JSON.parse(String(init.body)) as {
+			messages: Array<{ role: string; content: string }>;
+		};
+
+		expect(body.messages).toEqual([
+			expect.objectContaining({ role: "system" }),
+			{ role: "user", content: "My name is Pavel." },
+			{ role: "assistant", content: "Nice to meet you, Pavel." },
+			{ role: "user", content: "What is my name?" },
+		]);
+	});
+
 	it("maps timeout/abort failures to RUNTIME_UNAVAILABLE", async () => {
 		const abortErr = Object.assign(new Error("aborted"), { name: "AbortError" });
 		vi.stubGlobal(

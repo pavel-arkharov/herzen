@@ -1,12 +1,15 @@
 import { recordWav, recordAdaptiveWav, playAudio, beep } from "@herzen/audio";
-import { createResponseService } from "@herzen/response";
+import { createResponseService } from "@herzen/dialog";
 import { transcribeWav, SttError } from "@herzen/stt";
+import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { format } from "node:util";
 import { speak } from "@herzen/tts";
+import { createDialogJournal, type DialogJournal, type SessionSettingsSnapshot } from "./dialog_journal.js";
 import { createLogger, toStructuredSttTurnEntry } from "./logging.js";
+import { ConversationContextWindow, resolveContextWindowConfig } from "./context_window.js";
 import {
 	resolveInitialAdaptiveMaxSecondsInteractive,
 	resolveInitialRecordingModeInteractive,
@@ -15,8 +18,10 @@ import {
 import { createRuntime, type RuntimeController } from "./runtime.js";
 import {
 	createSttTriggerHandler,
+	type AssistantUtteranceRecord,
 	type ResponseErrorLike,
 	type SttLogEntry,
+	type UserUtteranceRecord,
 } from "./turn.js";
 import {
 	createTriggerSource,
@@ -26,6 +31,8 @@ import {
 import { isTriggerError, type TriggerMode, type TriggerSource } from "./trigger/types.js";
 
 const defaultDataRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "data");
+const DEFAULT_RESPONSE_TEMPERATURE = 0.2;
+const DEFAULT_RESPONSE_TIMEOUT_MS = 12_000;
 
 function resolveDataRoot(rawDataDir = process.env.HERZEN_DATA_DIR): string {
 	const trimmed = rawDataDir?.trim();
@@ -36,21 +43,50 @@ function resolveDataRoot(rawDataDir = process.env.HERZEN_DATA_DIR): string {
 const dataRoot = resolveDataRoot();
 const outDir = join(dataRoot, "audio");
 const logsDir = join(dataRoot, "logs");
+const conversationsDir = join(dataRoot, "conversations");
+const runtimeSessionId = randomUUID();
 mkdirSync(outDir, { recursive: true });
+
+function resolveFlag(rawValue: string | undefined, fallback: boolean): boolean {
+	const normalized = rawValue?.trim().toLowerCase();
+	if (!normalized) return fallback;
+	if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") return true;
+	if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") return false;
+	return fallback;
+}
+
+function resolveNumber(rawValue: string | undefined, fallback: number): number {
+	const trimmed = rawValue?.trim();
+	if (!trimmed) return fallback;
+	const parsed = Number.parseFloat(trimmed);
+	return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function resolvePositiveInteger(rawValue: string | undefined, fallback: number): number {
+	const trimmed = rawValue?.trim();
+	if (!trimmed) return fallback;
+	const parsed = Number.parseInt(trimmed, 10);
+	return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const logAudioInputEnabled = resolveFlag(process.env.HERZEN_LOG_AUDIO_INPUT, false);
 
 const coreLogger = createLogger({
 	logsDir,
 	component: "core",
+	sessionId: runtimeSessionId,
 });
 
 const triggerLogger = createLogger({
 	logsDir,
 	component: "trigger",
+	sessionId: runtimeSessionId,
 });
 
 const sttLogger = createLogger({
 	logsDir,
 	component: "stt",
+	sessionId: runtimeSessionId,
 });
 
 function asMessage(args: unknown[]): string {
@@ -62,6 +98,8 @@ async function appendSttLog(entry: SttLogEntry): Promise<void> {
 		"stt",
 		toStructuredSttTurnEntry(entry, {
 			transcriptEnabled: sttLogger.transcriptEnabled,
+			audioInputEnabled: logAudioInputEnabled,
+			sessionId: runtimeSessionId,
 		}),
 	);
 }
@@ -85,9 +123,18 @@ const runtimeLogger = {
 };
 
 let runtime: RuntimeController | null = null;
+let dialogJournal: DialogJournal | null = null;
 
 async function flushAndExit(code: number): Promise<void> {
-	await Promise.all([coreLogger.drain(), triggerLogger.drain(), sttLogger.drain()]);
+	await dialogJournal?.recordSessionEnded({
+		reason: code === 0 ? "normal_shutdown" : "runtime_error",
+	});
+	await Promise.all([
+		coreLogger.drain(),
+		triggerLogger.drain(),
+		sttLogger.drain(),
+		dialogJournal?.drain() ?? Promise.resolve(),
+	]);
 	process.exit(code);
 }
 
@@ -118,9 +165,31 @@ async function recordWithProgress(file: string, seconds: number): Promise<void> 
 function createHandleTrigger(
 	recordingMode: RecordingMode,
 	envOverrides: NodeJS.ProcessEnv,
+	journal: DialogJournal | null,
 ): () => Promise<void> {
 	const getRuntimeEnv = () => ({ ...process.env, ...envOverrides });
+	const contextConfig = resolveContextWindowConfig(getRuntimeEnv(), {
+		warn: (...args: unknown[]) => {
+			coreLogger.warn("core.context_window_config", { message: asMessage(args) });
+		},
+	});
+	const contextWindow = new ConversationContextWindow(contextConfig);
 	const responseService = resolveResponseService(getRuntimeEnv());
+	const onUserUtterance = async (event: UserUtteranceRecord) => {
+		await journal?.recordUserUtterance(event);
+	};
+	const onAssistantUtterance = async (event: AssistantUtteranceRecord) => {
+		await journal?.recordAssistantUtterance(event);
+	};
+	const onError = async (event: {
+		turn: number;
+		stage: "stt" | "response" | "telemetry";
+		code?: string;
+		message: string;
+		details?: Record<string, unknown>;
+	}) => {
+		await journal?.recordError(event);
+	};
 
 	return createSttTriggerHandler({
 		outDir,
@@ -150,6 +219,21 @@ function createHandleTrigger(
 				}
 			: undefined,
 		isResponseError,
+		getConversationContext: () => contextWindow.snapshot(),
+		onTurnOutcome: (outcome) => {
+			if (!outcome.hasTranscript || !outcome.transcript) return;
+
+			contextWindow.appendUser(
+				outcome.turn,
+				outcome.transcript,
+				normalizeContextLanguage(outcome.detectedLanguage),
+			);
+			if (outcome.assistantSource !== "model") return;
+			contextWindow.appendAssistant(outcome.turn, outcome.assistantText, outcome.assistantLanguage);
+		},
+		onUserUtterance,
+		onAssistantUtterance,
+		onError,
 		appendSttLog,
 		playAudio,
 		speak,
@@ -178,6 +262,14 @@ function isResponseError(err: unknown): err is ResponseErrorLike {
 		"message" in err &&
 		typeof (err as { message: unknown }).message === "string"
 	);
+}
+
+function normalizeContextLanguage(rawLanguage: string | undefined): "en" | "ru" | undefined {
+	const normalized = rawLanguage?.trim().toLowerCase();
+	if (!normalized) return undefined;
+	if (normalized.startsWith("ru")) return "ru";
+	if (normalized.startsWith("en")) return "en";
+	return undefined;
 }
 
 interface StartupTriggerRuntimeConfig {
@@ -265,6 +357,22 @@ function createPrestartedSource(source: TriggerSource): TriggerSource {
 	};
 }
 
+function resolveSessionSettings(
+	triggerMode: TriggerMode,
+	recordingMode: RecordingMode,
+	env: NodeJS.ProcessEnv,
+): SessionSettingsSnapshot {
+	return {
+		provider: env.HERZEN_RESPONSE_PROVIDER?.trim() || "ollama",
+		model: env.HERZEN_OLLAMA_MODEL?.trim() || "unconfigured",
+		temperature: resolveNumber(env.HERZEN_RESPONSE_TEMPERATURE, DEFAULT_RESPONSE_TEMPERATURE),
+		responseTimeoutMs: resolvePositiveInteger(env.HERZEN_RESPONSE_TIMEOUT_MS, DEFAULT_RESPONSE_TIMEOUT_MS),
+		triggerMode,
+		recordingMode,
+		sttLanguageMode: env.HERZEN_STT_LANGUAGE?.trim() || "auto",
+	};
+}
+
 async function main(): Promise<void> {
 	let startupConfig: StartupTriggerRuntimeConfig;
 	try {
@@ -275,11 +383,22 @@ async function main(): Promise<void> {
 		return;
 	}
 
+	const runtimeEnv = { ...process.env, ...startupConfig.recordEnvOverrides };
+	dialogJournal = createDialogJournal({
+		conversationsDir,
+		enabled: runtimeEnv.HERZEN_LOG_DIALOG,
+		markdownEnabled: runtimeEnv.HERZEN_LOG_DIALOG_MARKDOWN,
+		sessionId: runtimeSessionId,
+	});
+	await dialogJournal.recordSessionStarted(
+		resolveSessionSettings(startupConfig.triggerMode, startupConfig.recordingMode, runtimeEnv),
+	);
+
 	runtime = createRuntime({
 		resolveTriggerMode: () => startupConfig.triggerMode,
 		createTriggerSource: startupConfig.createSource,
 		isTriggerError,
-		onTrigger: createHandleTrigger(startupConfig.recordingMode, startupConfig.recordEnvOverrides),
+		onTrigger: createHandleTrigger(startupConfig.recordingMode, startupConfig.recordEnvOverrides, dialogJournal),
 		logger: runtimeLogger,
 		exit: flushAndExit,
 	});
