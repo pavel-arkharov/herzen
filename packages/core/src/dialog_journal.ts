@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
-import { appendFile } from "node:fs/promises";
+import { appendFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const SCHEMA_VERSION = "dialog.v1";
@@ -204,6 +204,7 @@ export function createDialogJournal(config: CreateDialogJournalConfig): DialogJo
 	const consoleTarget = config.consoleTarget ?? console;
 	const jsonlFile = join(config.conversationsDir, `${sessionId}.jsonl`);
 	const markdownFile = join(config.conversationsDir, `${sessionId}.md`);
+	const currentSessionFile = join(config.conversationsDir, "current_session");
 	const pendingWrites = new Set<Promise<void>>();
 
 	let seq = 0;
@@ -212,12 +213,20 @@ export function createDialogJournal(config: CreateDialogJournalConfig): DialogJo
 	let writeQueue = Promise.resolve();
 	let currentMarkdownTurn: number | null = null;
 
+	try {
+		mkdirSync(config.conversationsDir, { recursive: true });
+	} catch (err) {
+		warn(consoleTarget, "Failed to create conversation journal directory.", err);
+	}
+
 	if (enabled) {
-		try {
-			mkdirSync(config.conversationsDir, { recursive: true });
-		} catch (err) {
-			warn(consoleTarget, "Failed to create conversation journal directory.", err);
-		}
+		const pointerTask = writeFile(currentSessionFile, `${sessionId}\n`, "utf8").catch((err) => {
+			warn(consoleTarget, "Failed to update current conversation session pointer.", err);
+		});
+		pendingWrites.add(pointerTask);
+		void pointerTask.finally(() => {
+			pendingWrites.delete(pointerTask);
+		});
 	}
 
 	const enqueueWrites = async (

@@ -81,8 +81,10 @@ describe("createDialogJournal", () => {
 
 			const jsonlPath = join(conversationsDir, "session-test.jsonl");
 			const mdPath = join(conversationsDir, "session-test.md");
+			const pointerPath = join(conversationsDir, "current_session");
 			const events = await readJsonl(jsonlPath);
 			const markdown = await readFile(mdPath, "utf8");
+			const pointer = await readFile(pointerPath, "utf8");
 
 			expect(events.map((event) => event.type)).toEqual([
 				"session_started",
@@ -109,6 +111,7 @@ describe("createDialogJournal", () => {
 			expect(markdown).toContain("Herzen: Done.");
 			expect(markdown).toContain("```json");
 			expect(markdown).toContain('"type":"action_call"');
+			expect(pointer.trim()).toBe("session-test");
 		} finally {
 			await rm(conversationsDir, { recursive: true, force: true });
 		}

@@ -72,7 +72,8 @@ Current behavior (prototype):
 - defaults to `stdin` trigger mode (manual Enter key)
 - supports mode selection through `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`)
 - includes a `wakeword` trigger adapter backed by `@herzen/wakeword`
-- supports recording mode selection (`fixed` / `adaptive`) during interactive startup
+- defaults to adaptive recording mode at startup
+- exposes fixed mode selection during interactive startup only when `HERZEN_ENABLE_FIXED_RECORDING=1`
 - when adaptive mode is selected interactively, prompts for adaptive max length for the current run
 - uses typed trigger-domain errors for control flow (`SOURCE_CLOSED`, `SOURCE_FAILED`)
 - keeps a runtime-lifecycle `stdin` error listener in the trigger source, including during pipeline handling
@@ -94,7 +95,7 @@ Current behavior (prototype):
   - fixed: `HERZEN_RECORD_SECONDS` (default `3`)
   - adaptive: VAD endpointing driven by:
     - `HERZEN_RECORD_MIN_SECONDS` (default `1`)
-    - `HERZEN_RECORD_MAX_SECONDS` (default `12`)
+    - `HERZEN_RECORD_MAX_SECONDS` (default `60`)
     - `HERZEN_RECORD_SILENCE_SECONDS` (default `0.7`)
     - `HERZEN_RECORD_NO_SPEECH_TIMEOUT_SECONDS` (default `4`)
     - `HERZEN_VAD_START_THRESHOLD` (default `0.55`)

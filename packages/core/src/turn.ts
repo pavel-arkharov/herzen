@@ -4,7 +4,7 @@ import type { RecordingMode } from "./recording/factory.js";
 
 const DEFAULT_RECORD_SECONDS = 3;
 const DEFAULT_RECORD_MIN_SECONDS = 1;
-const DEFAULT_RECORD_MAX_SECONDS = 12;
+const DEFAULT_RECORD_MAX_SECONDS = 60;
 const DEFAULT_RECORD_SILENCE_SECONDS = 0.7;
 const DEFAULT_RECORD_NO_SPEECH_TIMEOUT_SECONDS = 4;
 const DEFAULT_VAD_START_THRESHOLD = 0.55;
@@ -323,9 +323,24 @@ export async function runSttTurn(
 		);
 	}
 
+	const outcome: TurnOutcome = {
+		turn: turnNumber,
+		hasTranscript: transcript.length > 0,
+		transcript: transcript || undefined,
+		detectedLanguage: transcript ? language : undefined,
+		assistantText: speechText,
+		assistantLanguage: speechLanguage,
+		assistantSource,
+		llmOutcome,
+	};
+
 	if (playbackEnabled) {
 		deps.logger.log("Playing back…");
-		await deps.playAudio(file);
+		try {
+			await deps.playAudio(file);
+		} catch (err) {
+			deps.logger.error("Playback error:", err);
+		}
 	} else {
 		deps.logger.log("Playback skipped. Set HERZEN_PLAYBACK=1 to enable.");
 	}
@@ -339,19 +354,14 @@ export async function runSttTurn(
 			model: llmModel,
 		}),
 	);
-	await deps.speak(speechText);
+	try {
+		await deps.speak(speechText);
+	} catch (err) {
+		deps.logger.error("TTS error:", err);
+	}
 	deps.logger.log("Done:", file);
 
-	return {
-		turn: turnNumber,
-		hasTranscript: transcript.length > 0,
-		transcript: transcript || undefined,
-		detectedLanguage: transcript ? language : undefined,
-		assistantText: speechText,
-		assistantLanguage: speechLanguage,
-		assistantSource,
-		llmOutcome,
-	};
+	return outcome;
 }
 
 function resolveRequestedResponseLanguage(languageMode: string): RequestedResponseLanguage {

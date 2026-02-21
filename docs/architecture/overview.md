@@ -41,9 +41,9 @@ Current trigger source modes:
 - `stdin` (default): manual Enter key trigger
 - `wakeword`: sidecar-backed trigger via `@herzen/wakeword`
 
-Recording mode is selected separately at startup in interactive sessions:
-- `fixed`
-- `adaptive` (VAD-based endpointing)
+Recording mode behavior:
+- `adaptive` (VAD-based endpointing) is the default at startup
+- `fixed` mode is available only when `HERZEN_ENABLE_FIXED_RECORDING=1`
 
 The core orchestration loop consumes `TriggerSource` events and does not
 directly wire terminal input semantics.
@@ -71,7 +71,7 @@ When triggered, the core currently:
   - fixed: `HERZEN_RECORD_SECONDS` (default `3`)
   - adaptive: VAD-based endpointing via `@herzen/audio` + `@herzen/vad`
     - min duration `HERZEN_RECORD_MIN_SECONDS` (default `1`)
-    - max duration `HERZEN_RECORD_MAX_SECONDS` (default `12`)
+    - max duration `HERZEN_RECORD_MAX_SECONDS` (default `60`)
     - trailing silence window `HERZEN_RECORD_SILENCE_SECONDS` (default `0.7`)
     - no-speech timeout `HERZEN_RECORD_NO_SPEECH_TIMEOUT_SECONDS` (default `4`)
     - start threshold `HERZEN_VAD_START_THRESHOLD` (default `0.55`)
@@ -102,6 +102,21 @@ The repository is a **pnpm monorepo**.
 - Each package represents one responsibility
 - Packages communicate via function calls, CLI calls, or local IPC
 - Heavy assets (models, audio, logs) are _never_ committed to git
+
+---
+
+## Active Rule: Journal Extraction Guardrail
+
+For Phase 2 and HA MVP, conversation observability remains implemented in `@herzen/core`.
+
+To keep extraction cheap later, the following rule is now active:
+
+- keep `core/src/dialog_journal.ts` and `core/src/dialog_tail.ts` dependency-light
+- these modules should depend only on Node stdlib and their own local schema/formatting logic
+- do not import trigger/runtime/audio/STT/TTS orchestration modules into journal/tail modules
+- evolve schema/formatting in these modules first, and keep runtime wiring thin around them
+
+This preserves a clean future move into a dedicated package without broad refactoring.
 
 ---
 

@@ -173,6 +173,17 @@ describe("tts command wrappers", () => {
 		await expect(pending).rejects.toThrow("say exited with code 1");
 	});
 
+	it("never falls back to piper when provider is say", async () => {
+		process.env.HERZEN_TTS_PROVIDER = "say";
+		process.env.HERZEN_TTS_FALLBACK_PROVIDER = "piper";
+		process.env.HERZEN_TTS_PIPER_MODEL_EN = "/models/en.onnx";
+		setupSpawn(1);
+
+		await expect(speak("hello")).rejects.toThrow("say exited with code 1");
+		expect(spawnMock).toHaveBeenCalledTimes(1);
+		expect(spawnMock).toHaveBeenCalledWith("say", ["hello"], { stdio: "inherit" });
+	});
+
 	it("uses xtts provider with local endpoint and plays synthesized wav bytes", async () => {
 		process.env.HERZEN_TTS_PROVIDER = "xtts";
 		const fetchMock = vi.fn(async () => {
@@ -206,9 +217,13 @@ describe("tts command wrappers", () => {
 		});
 
 		expect(writeFileMock).toHaveBeenCalledWith("/tmp/herzen-xtts-test/speech.wav", expect.any(Buffer));
-		expect(spawnMock).toHaveBeenCalledWith("play", ["-q", "/tmp/herzen-xtts-test/speech.wav"], {
+		expect(spawnMock).toHaveBeenCalledWith(
+			"play",
+			["-q", "-v", "0.92", "/tmp/herzen-xtts-test/speech.wav", "pad", "0.04", "0"],
+			{
 			stdio: "inherit",
-		});
+			},
+		);
 		expect(unlinkMock).toHaveBeenCalledWith("/tmp/herzen-xtts-test/speech.wav");
 		expect(rmMock).toHaveBeenCalledWith("/tmp/herzen-xtts-test", { recursive: true, force: true });
 	});
@@ -246,9 +261,14 @@ describe("tts command wrappers", () => {
 		);
 		expect(piperChild.stdin.end).toHaveBeenCalledWith("hello piper\n");
 		expect(statMock).toHaveBeenCalledWith("/tmp/herzen-xtts-test/speech.wav");
-		expect(spawnMock).toHaveBeenNthCalledWith(2, "play", ["-q", "/tmp/herzen-xtts-test/speech.wav"], {
-			stdio: "inherit",
-		});
+		expect(spawnMock).toHaveBeenNthCalledWith(
+			2,
+			"play",
+			["-q", "-v", "0.92", "/tmp/herzen-xtts-test/speech.wav", "pad", "0.04", "0"],
+			{
+				stdio: "inherit",
+			},
+		);
 		expect(unlinkMock).toHaveBeenCalledWith("/tmp/herzen-xtts-test/speech.wav");
 		expect(rmMock).toHaveBeenCalledWith("/tmp/herzen-xtts-test", { recursive: true, force: true });
 	});

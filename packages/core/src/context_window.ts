@@ -144,8 +144,13 @@ function resolvePositiveInteger(
 	const trimmed = rawValue?.trim();
 	if (!trimmed) return fallback;
 
-	const parsed = Number.parseInt(trimmed, 10);
-	if (Number.isInteger(parsed) && parsed > 0) return parsed;
+	if (!/^\d+$/.test(trimmed)) {
+		logger?.warn(`Invalid ${envName} "${rawValue}". Falling back to ${fallback}.`);
+		return fallback;
+	}
+
+	const parsed = Number(trimmed);
+	if (Number.isSafeInteger(parsed) && parsed > 0) return parsed;
 
 	logger?.warn(`Invalid ${envName} "${rawValue}". Falling back to ${fallback}.`);
 	return fallback;

@@ -42,7 +42,7 @@ At the moment, the system supports:
 - a trigger source boundary with `stdin` mode by default (`Enter` trigger)
 - selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`) plus interactive startup prompt
 - wakeword sidecar integration via `@herzen/wakeword` (Unix socket JSONL client for [`herzen-wake`](https://github.com/pavel-arkharov/herzen-wake))
-- recording mode selection at startup (`fixed` or `adaptive`)
+- adaptive recording mode by default at startup, with optional fixed-mode selector via `HERZEN_ENABLE_FIXED_RECORDING=1`
 - fixed recording via `HERZEN_RECORD_SECONDS` (default `3`)
 - adaptive recording via `@herzen/vad`-backed endpointing (speech start/stop thresholds, silence window, max cap, no-speech timeout)
 - stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override

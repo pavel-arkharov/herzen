@@ -9,6 +9,7 @@
 		"build:dialog": "pnpm --filter @herzen/dialog build",
 		"transcribe:file": "pnpm --filter @herzen/stt build && pnpm --filter @herzen/stt transcribe:file",
 		"dev": "pnpm -C packages/core dev",
+		"dialog:tail": "pnpm --filter @herzen/core dialog:tail",
 		"start": "pnpm build:core && pnpm --filter @herzen/core start",
 		"test": "vitest run",
 		"test:watch": "vitest",

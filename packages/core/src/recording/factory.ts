@@ -3,7 +3,8 @@ import readline from "node:readline";
 export type RecordingMode = "fixed" | "adaptive";
 
 const DEFAULT_PROMPT_TIMEOUT_MS = 10_000;
-const DEFAULT_ADAPTIVE_MAX_SECONDS = 30;
+const DEFAULT_ADAPTIVE_MAX_SECONDS = 60;
+const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 
 interface PromptRequest {
 	message: string;
@@ -15,6 +16,7 @@ type PromptFn = (request: PromptRequest) => Promise<string>;
 
 export interface InitialRecordingModeOptions {
 	rawMode?: string | undefined;
+	allowFixedMode?: boolean;
 	isInteractive?: boolean;
 	promptTimeoutMs?: number;
 	prompt?: PromptFn;
@@ -29,7 +31,7 @@ export interface InitialAdaptiveMaxSecondsOptions {
 }
 
 export function resolveRecordingMode(rawMode = process.env.HERZEN_RECORD_MODE): RecordingMode {
-	const normalized = (rawMode ?? "fixed").trim().toLowerCase();
+	const normalized = (rawMode ?? "adaptive").trim().toLowerCase();
 	if (normalized === "fixed" || normalized === "adaptive") return normalized;
 
 	throw new Error(
@@ -37,13 +39,24 @@ export function resolveRecordingMode(rawMode = process.env.HERZEN_RECORD_MODE): 
 	);
 }
 
+export function resolveFixedModeEnabled(
+	rawFlag = process.env.HERZEN_ENABLE_FIXED_RECORDING,
+): boolean {
+	const normalized = rawFlag?.trim().toLowerCase();
+	if (!normalized) return false;
+	return TRUE_VALUES.has(normalized);
+}
+
 export async function resolveInitialRecordingModeInteractive(
 	options: InitialRecordingModeOptions = {},
 ): Promise<RecordingMode> {
 	const rawMode = options.rawMode ?? process.env.HERZEN_RECORD_MODE;
+	const allowFixedMode = options.allowFixedMode ?? resolveFixedModeEnabled();
 	const isInteractive = options.isInteractive ?? Boolean(process.stdin.isTTY);
-	const defaultMode = rawMode !== undefined ? resolveRecordingMode(rawMode) : "fixed";
+	const requestedMode = rawMode !== undefined ? resolveRecordingMode(rawMode) : "adaptive";
+	const defaultMode: RecordingMode = allowFixedMode ? requestedMode : "adaptive";
 	if (!isInteractive) return defaultMode;
+	if (!allowFixedMode) return "adaptive";
 
 	const prompt = options.prompt ?? promptWithTimeout;
 	const answer = await prompt({
@@ -77,8 +90,8 @@ export async function resolveInitialAdaptiveMaxSecondsInteractive(
 
 function parseRecordingModeChoice(answer: string): RecordingMode {
 	const normalized = answer.trim().toLowerCase();
-	if (normalized === "1" || normalized === "adaptive") return "adaptive";
-	return "fixed";
+	if (normalized === "2" || normalized === "fixed") return "fixed";
+	return "adaptive";
 }
 
 function resolveDefaultAdaptiveMaxSeconds(rawDefault: number | undefined): number {

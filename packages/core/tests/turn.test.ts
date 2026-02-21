@@ -30,6 +30,8 @@ function createDeps(overrides?: {
 	transcribeImpl?: (file: string) => Promise<{ text: string; language: string; durationMs: number }>;
 	recordAdaptiveImpl?: (file: string, config: unknown) => Promise<{ durationSeconds: number; stopReason: string }>;
 	isSttError?: (err: unknown) => err is SttErrorLike;
+	playAudioImpl?: (file: string) => Promise<void>;
+	speakImpl?: (text: string) => Promise<void>;
 	generateResponseImpl?: (input: {
 		transcript: string;
 		detectedLanguage?: string;
@@ -62,8 +64,8 @@ function createDeps(overrides?: {
 			durationSeconds: 2.4,
 			stopReason: "trailing_silence",
 		}));
-	const playAudio = vi.fn(async () => {});
-	const speak = vi.fn(async () => {});
+	const playAudio = overrides?.playAudioImpl ?? vi.fn(async () => {});
+	const speak = overrides?.speakImpl ?? vi.fn(async () => {});
 	const onUserUtterance = vi.fn(async () => {});
 	const onAssistantUtterance = vi.fn(async () => {});
 	const onError = vi.fn(async () => {});
@@ -332,6 +334,64 @@ describe("createSttTriggerHandler", () => {
 				errorCode: undefined,
 				language: "en",
 				llmOutcome: undefined,
+			}),
+		);
+	});
+
+	it("returns turn outcome even when playback fails", async () => {
+		const playbackErr = new Error("device busy");
+		const playAudioImpl = vi.fn(async () => {
+			throw playbackErr;
+		});
+		const { deps, logger, speak, onTurnOutcome } = createDeps({
+			env: { HERZEN_PLAYBACK: "1" },
+			playAudioImpl,
+			transcribeImpl: async () => ({
+				text: "hello world",
+				language: "en",
+				durationMs: 456,
+			}),
+		});
+		const handleTrigger = createSttTriggerHandler(deps);
+
+		await expect(handleTrigger()).resolves.toBeUndefined();
+
+		expect(playAudioImpl).toHaveBeenCalledWith("/tmp/audio/test-1000.wav");
+		expect(speak).toHaveBeenCalledWith("Model reply");
+		expect(logger.error).toHaveBeenCalledWith("Playback error:", playbackErr);
+		expect(onTurnOutcome).toHaveBeenCalledWith(
+			expect.objectContaining({
+				turn: 1,
+				hasTranscript: true,
+				transcript: "hello world",
+			}),
+		);
+	});
+
+	it("returns turn outcome even when TTS fails", async () => {
+		const ttsErr = new Error("tts unavailable");
+		const speakImpl = vi.fn(async () => {
+			throw ttsErr;
+		});
+		const { deps, logger, onTurnOutcome } = createDeps({
+			speakImpl,
+			transcribeImpl: async () => ({
+				text: "hello world",
+				language: "en",
+				durationMs: 456,
+			}),
+		});
+		const handleTrigger = createSttTriggerHandler(deps);
+
+		await expect(handleTrigger()).resolves.toBeUndefined();
+
+		expect(speakImpl).toHaveBeenCalledWith("Model reply");
+		expect(logger.error).toHaveBeenCalledWith("TTS error:", ttsErr);
+		expect(onTurnOutcome).toHaveBeenCalledWith(
+			expect.objectContaining({
+				turn: 1,
+				hasTranscript: true,
+				transcript: "hello world",
 			}),
 		);
 	});

@@ -285,7 +285,7 @@ async function resolveStartupTriggerRuntimeConfig(): Promise<StartupTriggerRunti
 	if (recordingMode === "adaptive") {
 		const adaptiveMaxSeconds = await resolveInitialAdaptiveMaxSecondsInteractive({
 			rawMaxSeconds: process.env.HERZEN_RECORD_MAX_SECONDS,
-			defaultMaxSeconds: 30,
+			defaultMaxSeconds: 60,
 		});
 		recordEnvOverrides.HERZEN_RECORD_MAX_SECONDS = String(adaptiveMaxSeconds);
 	}

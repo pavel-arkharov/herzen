@@ -8,6 +8,8 @@ const DEFAULT_TTS_FALLBACK_PROVIDER: TtsProvider = "say";
 const DEFAULT_XTTS_ENDPOINT = "http://127.0.0.1:8020";
 const DEFAULT_XTTS_TIMEOUT_MS = 12_000;
 const DEFAULT_XTTS_VOICE_PROFILE = "default";
+const PLAY_HEADROOM_GAIN = "0.92";
+const PLAY_LEAD_IN_SECONDS = "0.04";
 
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
@@ -711,7 +713,7 @@ async function playTempWav(wavBytes: Buffer): Promise<void> {
 
 async function playWavFile(file: string, provider: TtsProvider): Promise<void> {
 	try {
-		await run("play", ["-q", file]);
+		await run("play", ["-q", "-v", PLAY_HEADROOM_GAIN, file, "pad", PLAY_LEAD_IN_SECONDS, "0"]);
 		return;
 	} catch (err) {
 		if (!isCommandNotFound(err)) {
@@ -826,7 +828,7 @@ export async function speak(text: string): Promise<void> {
 	try {
 		await speakWithProvider(provider, request, process.env);
 	} catch (err) {
-		if (fallbackProvider === provider) throw err;
+		if (provider === "say" || fallbackProvider === provider) throw err;
 		logFallbackWarning(provider, fallbackProvider, language, err);
 		await speakWithProvider(fallbackProvider, request, process.env);
 	}

@@ -117,4 +117,22 @@ describe("resolveContextWindowConfig", () => {
 		});
 		expect(warn).toHaveBeenCalledTimes(2);
 	});
+
+	it("rejects partially numeric context limits and falls back to defaults", () => {
+		const warn = vi.fn();
+		const config = resolveContextWindowConfig(
+			{
+				HERZEN_CONTEXT_MAX_TURNS: "10abc",
+				HERZEN_CONTEXT_MAX_CHARS: "4000xyz",
+			},
+			{ warn },
+		);
+
+		expect(config).toEqual({
+			enabled: true,
+			maxTurns: 6,
+			maxChars: 4_000,
+		});
+		expect(warn).toHaveBeenCalledTimes(2);
+	});
 });
