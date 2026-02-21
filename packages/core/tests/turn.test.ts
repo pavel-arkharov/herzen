@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	createSttTriggerHandler,
 	type ResponseErrorLike,
+	runSttTurn,
 	type SttErrorLike,
 	type SttLogEntry,
 	type TurnOutcome,
@@ -338,6 +339,32 @@ describe("createSttTriggerHandler", () => {
 		);
 	});
 
+	it("suppresses no-speech fallback in follow-up mode", async () => {
+		const { deps, speak, onAssistantUtterance, appendSttLog } = createDeps({
+			transcribeImpl: async () => ({
+				text: " ",
+				language: "en",
+				durationMs: 120,
+			}),
+		});
+
+		const outcome = await runSttTurn(deps, 1, {
+			mode: "followup",
+			suppressNoSpeechFallback: true,
+			remainingWindowMs: 4_000,
+		});
+
+		expect(outcome.hasTranscript).toBe(false);
+		expect(outcome.assistantText).toBe("");
+		expect(speak).not.toHaveBeenCalled();
+		expect(onAssistantUtterance).not.toHaveBeenCalled();
+		expect(appendSttLog).toHaveBeenCalledWith(
+			expect.objectContaining({
+				transcript: undefined,
+			}),
+		);
+	});
+
 	it("returns turn outcome even when playback fails", async () => {
 		const playbackErr = new Error("device busy");
 		const playAudioImpl = vi.fn(async () => {
@@ -487,6 +514,38 @@ describe("createSttTriggerHandler", () => {
 		);
 		expect(recordAudioFixed).not.toHaveBeenCalled();
 		expect(logger.log).toHaveBeenCalledWith("Triggered. Adaptive recording…");
+	});
+
+	it("caps adaptive no-speech timeout by remaining follow-up window", async () => {
+		const { deps, recordAudioAdaptive } = createDeps({
+			recordingMode: "adaptive",
+			env: {
+				HERZEN_RECORD_MIN_SECONDS: "1",
+				HERZEN_RECORD_MAX_SECONDS: "12",
+				HERZEN_RECORD_SILENCE_SECONDS: "0.6",
+				HERZEN_RECORD_NO_SPEECH_TIMEOUT_SECONDS: "10",
+				HERZEN_VAD_START_THRESHOLD: "0.6",
+				HERZEN_VAD_END_THRESHOLD: "0.3",
+				HERZEN_VAD_FRAME_SAMPLES: "512",
+			},
+			transcribeImpl: async () => ({
+				text: "followup",
+				language: "en",
+				durationMs: 100,
+			}),
+		});
+
+		await runSttTurn(deps, 1, {
+			mode: "followup",
+			remainingWindowMs: 3_000,
+		});
+
+		expect(recordAudioAdaptive).toHaveBeenCalledWith(
+			"/tmp/audio/test-1000.wav",
+			expect.objectContaining({
+				noSpeechTimeoutSeconds: 3,
+			}),
+		);
 	});
 
 	it("falls back to fixed recording when adaptive recording throws", async () => {

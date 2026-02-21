@@ -108,6 +108,12 @@ Current behavior (prototype):
   - `HERZEN_CONTEXT_ENABLED` (default `1`)
   - `HERZEN_CONTEXT_MAX_TURNS` (default `6`)
   - `HERZEN_CONTEXT_MAX_CHARS` (default `4000`)
+- supports bounded conversational follow-up mode (default disabled):
+  - `HERZEN_FOLLOWUP_ENABLED` (default `0`)
+  - `HERZEN_FOLLOWUP_WINDOW_SECONDS` (default `8`)
+  - `HERZEN_FOLLOWUP_MAX_TURNS` (default `3`)
+  - `HERZEN_FOLLOWUP_STOP_PHRASES` (optional CSV, normalized exact match)
+  - follow-up closes on timeout, no speech, stop phrase, max turns, or turn error
 - appends session-scoped conversation events (`session_started`, `user_utterance`, `assistant_utterance`, action placeholders, `error`, `session_ended`)
 - plays the recording only when `HERZEN_PLAYBACK=1`
 - speaks model-generated reply text via `@herzen/dialog` or a fallback message

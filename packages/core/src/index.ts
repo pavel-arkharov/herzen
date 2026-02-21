@@ -10,6 +10,8 @@ import { speak } from "@herzen/tts";
 import { createDialogJournal, type DialogJournal, type SessionSettingsSnapshot } from "./dialog_journal.js";
 import { createLogger, toStructuredSttTurnEntry } from "./logging.js";
 import { ConversationContextWindow, resolveContextWindowConfig } from "./context_window.js";
+import { isFollowupStopPhrase, resolveFollowupConfig } from "./followup_config.js";
+import { runFollowupSession } from "./followup_session.js";
 import {
 	resolveInitialAdaptiveMaxSecondsInteractive,
 	resolveInitialRecordingModeInteractive,
@@ -17,11 +19,14 @@ import {
 } from "./recording/factory.js";
 import { createRuntime, type RuntimeController } from "./runtime.js";
 import {
-	createSttTriggerHandler,
 	type AssistantUtteranceRecord,
+	type RunSttTurnOptions,
 	type ResponseErrorLike,
 	type SttLogEntry,
+	type TriggerTurnDependencies,
+	type TurnOutcome,
 	type UserUtteranceRecord,
+	runSttTurn,
 } from "./turn.js";
 import {
 	createTriggerSource,
@@ -173,6 +178,18 @@ function createHandleTrigger(
 			coreLogger.warn("core.context_window_config", { message: asMessage(args) });
 		},
 	});
+	const followupConfig = resolveFollowupConfig(getRuntimeEnv(), {
+		warn: (...args: unknown[]) => {
+			coreLogger.warn("core.followup_config", { message: asMessage(args) });
+		},
+	});
+	if (followupConfig.enabled) {
+		runtimeLogger.log(
+			`Follow-up mode: enabled (${followupConfig.windowSeconds.toFixed(1)}s window, ${followupConfig.maxTurns} max turns).`,
+		);
+	} else {
+		runtimeLogger.log("Follow-up mode: disabled (set HERZEN_FOLLOWUP_ENABLED=1 to enable).");
+	}
 	const contextWindow = new ConversationContextWindow(contextConfig);
 	const responseService = resolveResponseService(getRuntimeEnv());
 	const onUserUtterance = async (event: UserUtteranceRecord) => {
@@ -191,7 +208,7 @@ function createHandleTrigger(
 		await journal?.recordError(event);
 	};
 
-	return createSttTriggerHandler({
+	const turnDeps: TriggerTurnDependencies = {
 		outDir,
 		getEnv: getRuntimeEnv,
 		now: () => Date.now(),
@@ -220,24 +237,120 @@ function createHandleTrigger(
 			: undefined,
 		isResponseError,
 		getConversationContext: () => contextWindow.snapshot(),
-		onTurnOutcome: (outcome) => {
-			if (!outcome.hasTranscript || !outcome.transcript) return;
-
-			contextWindow.appendUser(
-				outcome.turn,
-				outcome.transcript,
-				normalizeContextLanguage(outcome.detectedLanguage),
-			);
-			if (outcome.assistantSource !== "model") return;
-			contextWindow.appendAssistant(outcome.turn, outcome.assistantText, outcome.assistantLanguage);
-		},
 		onUserUtterance,
 		onAssistantUtterance,
 		onError,
 		appendSttLog,
 		playAudio,
 		speak,
-	});
+	};
+
+	let turn = 0;
+
+	const onTurnOutcome = async (outcome: TurnOutcome): Promise<void> => {
+		if (!outcome.hasTranscript || !outcome.transcript) return;
+
+		contextWindow.appendUser(
+			outcome.turn,
+			outcome.transcript,
+			normalizeContextLanguage(outcome.detectedLanguage),
+		);
+		if (outcome.assistantSource !== "model") return;
+		contextWindow.appendAssistant(outcome.turn, outcome.assistantText, outcome.assistantLanguage);
+	};
+
+	const runTurn = async (options: RunSttTurnOptions): Promise<TurnOutcome> => {
+		const outcome = await runSttTurn(turnDeps, ++turn, options);
+		await onTurnOutcome(outcome);
+		return outcome;
+	};
+
+	const recordFollowupActionCall = async (
+		turnNumber: number,
+		operation: string,
+		args: Record<string, unknown>,
+	): Promise<void> => {
+		try {
+			await journal?.recordActionCall({
+				turn: turnNumber,
+				integration: "core.followup",
+				operation,
+				args,
+			});
+		} catch (err) {
+			sttTurnLogger.error("Failed to write follow-up action_call journal event:", err);
+		}
+	};
+
+	const recordFollowupActionResult = async (
+		turnNumber: number,
+		operation: string,
+		result: Record<string, unknown>,
+	): Promise<void> => {
+		try {
+			await journal?.recordActionResult({
+				turn: turnNumber,
+				integration: "core.followup",
+				operation,
+				result,
+			});
+		} catch (err) {
+			sttTurnLogger.error("Failed to write follow-up action_result journal event:", err);
+		}
+	};
+
+	return async () => {
+		const initialTurn = await runTurn({ mode: "trigger" });
+		const followupResult = await runFollowupSession({
+			initialTurn,
+			config: followupConfig,
+			nowMs: () => Date.now(),
+			runTurn,
+			isStopPhrase: (transcript) => isFollowupStopPhrase(transcript, followupConfig.stopPhrases),
+			callbacks: {
+				onWindowOpened: async (event) => {
+					runtimeLogger.log(
+						`Follow-up window opened (${event.windowSeconds.toFixed(1)}s, max turns ${event.maxTurns}).`,
+					);
+					await recordFollowupActionCall(initialTurn.turn, "window_opened", {
+						windowSeconds: event.windowSeconds,
+						maxTurns: event.maxTurns,
+						stopPhrases: followupConfig.stopPhrases,
+					});
+				},
+				onTurnStarted: async (event) => {
+					runtimeLogger.log(
+						`Follow-up turn ${event.index} started (${Math.round(event.remainingWindowMs)}ms remaining).`,
+					);
+					await recordFollowupActionCall(initialTurn.turn + event.index, "turn_started", {
+						index: event.index,
+						remainingWindowMs: Math.round(event.remainingWindowMs),
+					});
+				},
+				onTurnCompleted: async (event) => {
+					runtimeLogger.log(
+						`Follow-up turn ${event.index} completed (hasTranscript=${event.outcome.hasTranscript ? "1" : "0"}).`,
+					);
+					await recordFollowupActionResult(event.outcome.turn, "turn_completed", {
+						index: event.index,
+						hasTranscript: event.outcome.hasTranscript,
+					});
+				},
+				onWindowClosed: async (event) => {
+					runtimeLogger.log(`Follow-up window closed (${event.reason}).`);
+					await recordFollowupActionResult(event.lastTurn, "window_closed", {
+						reason: event.reason,
+						executedTurns: event.executedTurns,
+					});
+				},
+			},
+		});
+
+		if (!followupResult.opened) return;
+		if (followupResult.closeReason === "error") {
+			runtimeLogger.error("Follow-up loop closed on turn error.");
+		}
+	};
 }
 
 function resolveResponseService(env: NodeJS.ProcessEnv) {

@@ -15,6 +15,7 @@ const FALLBACK_SPEECH = "[en] I couldn't understand that.";
 const RESPONSE_FALLBACK_SPEECH_EN = "[en] I heard you, but I can't respond right now.";
 const RESPONSE_FALLBACK_SPEECH_RU = "[ru] Я вас услышал, но сейчас не могу ответить.";
 const FALLBACK_RESPONSE_ERROR_CODE = "RESPONSE_UNAVAILABLE";
+const MIN_RECORD_SECONDS = 0.2;
 
 type RequestedResponseLanguage = "auto" | "en" | "ru";
 
@@ -135,6 +136,14 @@ export interface AdaptiveRecordResultLike {
 	stopReason: string;
 }
 
+export type TurnInvocationMode = "trigger" | "followup";
+
+export interface RunSttTurnOptions {
+	mode?: TurnInvocationMode;
+	remainingWindowMs?: number;
+	suppressNoSpeechFallback?: boolean;
+}
+
 export interface TurnOutcome {
 	turn: number;
 	hasTranscript: boolean;
@@ -150,7 +159,7 @@ export function createSttTriggerHandler(deps: TriggerTurnDependencies): () => Pr
 	let turn = 0;
 
 	return async () => {
-		const outcome = await runSttTurn(deps, ++turn);
+		const outcome = await runSttTurn(deps, ++turn, { mode: "trigger" });
 		await executeJournalHook(deps.logger, "Failed to process turn outcome hook", () =>
 			deps.onTurnOutcome?.(outcome),
 		);
@@ -160,15 +169,26 @@ export function createSttTriggerHandler(deps: TriggerTurnDependencies): () => Pr
 export async function runSttTurn(
 	deps: TriggerTurnDependencies,
 	turnNumber: number,
+	options: RunSttTurnOptions = {},
 ): Promise<TurnOutcome> {
+	const mode = options.mode ?? "trigger";
+	const suppressNoSpeechFallback = mode === "followup" && options.suppressNoSpeechFallback === true;
+	const remainingWindowSeconds = toRemainingWindowSeconds(options.remainingWindowMs);
 	const env = deps.getEnv();
 	const file = join(deps.outDir, `test-${deps.now()}.wav`);
 	const languageMode = resolveSttLanguageMode(env.HERZEN_STT_LANGUAGE);
 	const requestedLanguage = resolveRequestedResponseLanguage(languageMode);
 	const recordSeconds = resolveRecordSeconds(env.HERZEN_RECORD_SECONDS, deps.logger);
+	const effectiveRecordSeconds =
+		mode === "followup" && remainingWindowSeconds !== undefined
+			? Math.min(recordSeconds, Math.max(MIN_RECORD_SECONDS, remainingWindowSeconds))
+			: recordSeconds;
 	const playbackEnabled = resolvePlaybackEnabled(env.HERZEN_PLAYBACK);
 
-	await recordTurnAudio(deps, file, env, recordSeconds);
+	await recordTurnAudio(deps, file, env, effectiveRecordSeconds, {
+		mode,
+		remainingWindowSeconds,
+	});
 
 	let latencyMs: number;
 	let durationMs: number;
@@ -183,6 +203,7 @@ export async function runSttTurn(
 	let speechText = FALLBACK_SPEECH;
 	let speechLanguage: "en" | "ru" = "en";
 	let assistantSource: "model" | "fallback" = "fallback";
+	let shouldSpeak = true;
 	const sttStart = deps.now();
 
 	try {
@@ -205,6 +226,9 @@ export async function runSttTurn(
 			);
 		} else {
 			deps.logger.log("[no speech detected]");
+			if (suppressNoSpeechFallback) {
+				shouldSpeak = false;
+			}
 		}
 	} catch (err) {
 		latencyMs = deps.now() - sttStart;
@@ -328,7 +352,7 @@ export async function runSttTurn(
 		hasTranscript: transcript.length > 0,
 		transcript: transcript || undefined,
 		detectedLanguage: transcript ? language : undefined,
-		assistantText: speechText,
+		assistantText: shouldSpeak ? speechText : "",
 		assistantLanguage: speechLanguage,
 		assistantSource,
 		llmOutcome,
@@ -345,19 +369,23 @@ export async function runSttTurn(
 		deps.logger.log("Playback skipped. Set HERZEN_PLAYBACK=1 to enable.");
 	}
 
-	scheduleJournalHook(deps.logger, "Failed to write assistant utterance journal event", () =>
-		deps.onAssistantUtterance?.({
-			turn: turnNumber,
-			text: speechText,
-			language: speechLanguage,
-			provider: llmProvider,
-			model: llmModel,
-		}),
-	);
-	try {
-		await deps.speak(speechText);
-	} catch (err) {
-		deps.logger.error("TTS error:", err);
+	if (shouldSpeak) {
+		scheduleJournalHook(deps.logger, "Failed to write assistant utterance journal event", () =>
+			deps.onAssistantUtterance?.({
+				turn: turnNumber,
+				text: speechText,
+				language: speechLanguage,
+				provider: llmProvider,
+				model: llmModel,
+			}),
+		);
+		try {
+			await deps.speak(speechText);
+		} catch (err) {
+			deps.logger.error("TTS error:", err);
+		}
+	} else {
+		deps.logger.log("Follow-up no-speech fallback suppressed.");
 	}
 	deps.logger.log("Done:", file);
 
@@ -429,6 +457,10 @@ async function recordTurnAudio(
 	file: string,
 	env: NodeJS.ProcessEnv,
 	fixedSeconds: number,
+	options: {
+		mode: TurnInvocationMode;
+		remainingWindowSeconds: number | undefined;
+	},
 ): Promise<void> {
 	if (deps.recordingMode !== "adaptive") {
 		deps.logger.log(`Triggered. Recording ${fixedSeconds.toFixed(1)} seconds…`);
@@ -436,7 +468,10 @@ async function recordTurnAudio(
 		return;
 	}
 
-	const adaptiveSettings = resolveAdaptiveRecordSettings(env, deps.logger);
+	const adaptiveSettings = resolveAdaptiveRecordSettings(env, deps.logger, {
+		noSpeechTimeoutCapSeconds:
+			options.mode === "followup" ? options.remainingWindowSeconds : undefined,
+	});
 	if (!adaptiveSettings) {
 		deps.logger.log(`Triggered. Recording ${fixedSeconds.toFixed(1)} seconds…`);
 		await deps.recordAudioFixed(file, fixedSeconds);
@@ -461,7 +496,13 @@ async function recordTurnAudio(
 	}
 }
 
-function resolveAdaptiveRecordSettings(env: NodeJS.ProcessEnv, logger: TurnLogger): AdaptiveRecordSettings | null {
+function resolveAdaptiveRecordSettings(
+	env: NodeJS.ProcessEnv,
+	logger: TurnLogger,
+	options: {
+		noSpeechTimeoutCapSeconds?: number;
+	} = {},
+): AdaptiveRecordSettings | null {
 	try {
 		const maxSeconds = resolvePositiveFiniteNumber(
 			env.HERZEN_RECORD_MAX_SECONDS,
@@ -478,11 +519,17 @@ function resolveAdaptiveRecordSettings(env: NodeJS.ProcessEnv, logger: TurnLogge
 			DEFAULT_RECORD_SILENCE_SECONDS,
 			"HERZEN_RECORD_SILENCE_SECONDS",
 		);
-		const noSpeechTimeoutSeconds = resolvePositiveFiniteNumber(
+		let noSpeechTimeoutSeconds = resolvePositiveFiniteNumber(
 			env.HERZEN_RECORD_NO_SPEECH_TIMEOUT_SECONDS,
 			DEFAULT_RECORD_NO_SPEECH_TIMEOUT_SECONDS,
 			"HERZEN_RECORD_NO_SPEECH_TIMEOUT_SECONDS",
 		);
+		if (typeof options.noSpeechTimeoutCapSeconds === "number") {
+			noSpeechTimeoutSeconds = Math.min(noSpeechTimeoutSeconds, options.noSpeechTimeoutCapSeconds);
+			if (noSpeechTimeoutSeconds <= 0) {
+				throw new Error("Follow-up recording window expired.");
+			}
+		}
 		const startThreshold = resolveProbability(
 			env.HERZEN_VAD_START_THRESHOLD,
 			DEFAULT_VAD_START_THRESHOLD,
@@ -522,6 +569,12 @@ function resolveAdaptiveRecordSettings(env: NodeJS.ProcessEnv, logger: TurnLogge
 		);
 		return null;
 	}
+}
+
+function toRemainingWindowSeconds(remainingWindowMs: number | undefined): number | undefined {
+	if (typeof remainingWindowMs !== "number") return undefined;
+	if (!Number.isFinite(remainingWindowMs) || remainingWindowMs <= 0) return undefined;
+	return remainingWindowMs / 1000;
 }
 
 function resolvePositiveFiniteNumber(
