@@ -51,6 +51,7 @@ At the moment, the system supports:
 - in-session short-term context window for LLM requests (bounded by `HERZEN_CONTEXT_ENABLED`, `HERZEN_CONTEXT_MAX_TURNS`, `HERZEN_CONTEXT_MAX_CHARS`)
 - optional conversational follow-up mode after each reply (default off) with bounded window/turns (`HERZEN_FOLLOWUP_ENABLED`, `HERZEN_FOLLOWUP_WINDOW_SECONDS`, `HERZEN_FOLLOWUP_MAX_TURNS`, `HERZEN_FOLLOWUP_STOP_PHRASES`)
   - `HERZEN_FOLLOWUP_WINDOW_SECONDS` is the per-turn silence wait budget in follow-up mode
+- deterministic Home Assistant light on/off handling via `@herzen/integration-homeassistant` with allowlisted entities/aliases
 
 Wakeword mode now runs through the external `herzen-wake` daemon and can trigger full turns in `@herzen/core`.
 
@@ -105,6 +106,34 @@ LLM response dependency:
 - model selection via `HERZEN_OLLAMA_MODEL` (required)
 - optional endpoint override via `HERZEN_OLLAMA_BASE_URL` (loopback-only by default)
 
+Home Assistant integration dependency:
+
+- reachable Home Assistant instance on LAN
+- `HERZEN_HA_ENABLED=1`
+- configure one of:
+  - `HERZEN_HA_SECRETS_DIR` with files:
+    - `base_url`
+    - `token` (owner-only, `chmod 600`)
+  - or explicit file paths:
+    - `HERZEN_HA_BASE_URL_FILE`
+    - `HERZEN_HA_TOKEN_FILE` (owner-only, `chmod 600`)
+  - or inline values (least preferred):
+    - `HERZEN_HA_BASE_URL`
+    - `HERZEN_HA_TOKEN`
+- light scope controls:
+  - `HERZEN_HA_ALLOWED_LIGHTS` (comma-separated `light.entity_id` values)
+  - `HERZEN_HA_LIGHT_ALIASES` (comma-separated `alias=light.entity_id|light.other_id` mappings)
+  - `HERZEN_HA_SCENE_ALIASES` (comma-separated `alias=scene.entity_id` mappings)
+  - `HERZEN_HA_DEFAULT_LIGHT` (fallback entity when a single target is implied)
+
+Home Assistant setup preference:
+
+- use file-based secrets under `data/secrets/home_assistant`:
+  - `base_url`
+  - `token` (owner-only permission, `chmod 600`)
+- set `HERZEN_HA_SECRETS_DIR` to that folder
+- keep `HERZEN_HA_ENABLED=1`
+
 ---
 
 ## Monorepo structure (overview)
@@ -119,6 +148,7 @@ packages/
   vad/ # voice activity detection (Silero VAD wrapper)
   wakeword/ # wakeword sidecar client utilities
   dialog/ # local LLM dialog generation boundary
+  integration-homeassistant/ # deterministic local Home Assistant light control
 data/ # local-only runtime data (gitignored)
   audio/
   logs/
@@ -126,7 +156,7 @@ data/ # local-only runtime data (gitignored)
 docs/ # architecture, packages, and design notes
 ```
 
-Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`, `packages/vad`, `packages/wakeword`, `packages/dialog`.
+Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`, `packages/vad`, `packages/wakeword`, `packages/dialog`, `packages/integration-homeassistant`.
 
 ---
 
@@ -161,6 +191,27 @@ Supported input formats:
 
 - direct: `.wav`, `.mp3`, `.ogg`, `.flac`
 - auto-converted: `.m4a` (via `ffmpeg` or `afconvert`)
+
+---
+
+## Home Assistant Usage (Deterministic)
+
+With HA enabled, core checks deterministic HA intent mapping before calling the LLM:
+
+- scene alias match -> `scene.turn_on`
+- light on/off intent + alias/entity match -> `light.turn_on` / `light.turn_off`
+- no HA match -> normal `@herzen/dialog` LLM response path
+
+Example utterances:
+
+- `Herzen, living room lights on`
+- `Herzen, спальня свет выключи`
+- `Herzen, bedroom reading`
+- `Herzen, corridor nightlight`
+
+Current limitation:
+
+- one utterance triggers one HA action (command chaining is not implemented yet)
 
 ---
 

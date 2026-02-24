@@ -24,6 +24,7 @@ Related external repo:
 
 - /Users/parkharo/Programming/herzen/docs/packages/overview.md
 - /Users/parkharo/Programming/herzen/docs/packages/dialog.md
+- /Users/parkharo/Programming/herzen/docs/packages/integration-homeassistant.md
 - /Users/parkharo/Programming/herzen/docs/packages/stt.md
 - /Users/parkharo/Programming/herzen/docs/packages/tts.md
 - /Users/parkharo/Programming/herzen/docs/packages/vad.md

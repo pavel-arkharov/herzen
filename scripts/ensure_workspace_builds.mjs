@@ -9,11 +9,15 @@ const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const PACKAGE_DIR_BY_NAME = {
 	"@herzen/dialog": "packages/dialog",
+	"@herzen/integration-homeassistant": "packages/integration-homeassistant",
 	"@herzen/tts": "packages/tts",
 };
 
 const requestedPackages = process.argv.slice(2);
-const packageNames = requestedPackages.length > 0 ? requestedPackages : ["@herzen/dialog", "@herzen/tts"];
+const packageNames =
+	requestedPackages.length > 0 ?
+		requestedPackages
+	: ["@herzen/dialog", "@herzen/tts", "@herzen/integration-homeassistant"];
 
 async function main() {
 	for (const packageName of packageNames) {

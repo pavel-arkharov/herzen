@@ -81,6 +81,9 @@ When triggered, the core currently:
   - invalid adaptive config falls back to fixed recording for that turn
   - adaptive runtime failures also fall back to fixed recording for that turn
 - runs local STT via `@herzen/stt` (`transcribeWav`)
+- routes deterministic Home Assistant intents via `@herzen/integration-homeassistant` when enabled
+  - supported now: `light.turn_on`, `light.turn_off`, `scene.turn_on`
+  - if no HA intent matches, falls through to LLM generation
 - generates local LLM replies via `@herzen/dialog` (Ollama provider)
 - appends one structured STT event per trigger to `data/logs/stt.jsonl`
 - optionally plays the recorded file when `HERZEN_PLAYBACK=1`
@@ -142,10 +145,11 @@ The system must remain usable even if the entire repository is copied to a new m
 
 ## Current packages
 
-Seven packages are currently implemented: **audio**, **core**, **stt**, **tts**, **vad**, **wakeword**, and **dialog**.
+Eight packages are currently implemented: **audio**, **core**, **stt**, **tts**, **vad**, **wakeword**, **dialog**, and **integration-homeassistant**.
 
 Notes:
 - `@herzen/dialog` currently supports local Ollama-backed MVP replies
+- `@herzen/integration-homeassistant` currently provides deterministic local HA control for allowlisted lights/scenes
 - advanced response features (tools/memory/streaming) are intentionally deferred
 
 More will be added later without breaking these.

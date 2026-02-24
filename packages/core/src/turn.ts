@@ -47,6 +47,7 @@ export interface SttErrorLike {
 }
 
 export interface ResponseInputLike {
+	turn?: number;
 	transcript: string;
 	detectedLanguage?: string;
 	requestedLanguage?: RequestedResponseLanguage;
@@ -262,13 +263,14 @@ export async function runSttTurn(
 	if (transcript) {
 		if (deps.generateResponse) {
 			const responseStartedAt = deps.now();
-			try {
-				const responseInput: ResponseInputLike = {
-					transcript,
-					detectedLanguage: language,
-					requestedLanguage,
-					timestampIso: deps.nowIso(),
-				};
+				try {
+					const responseInput: ResponseInputLike = {
+						turn: turnNumber,
+						transcript,
+						detectedLanguage: language,
+						requestedLanguage,
+						timestampIso: deps.nowIso(),
+					};
 				const conversationContext = deps.getConversationContext?.();
 				if (conversationContext && conversationContext.length > 0) {
 					responseInput.conversationContext = conversationContext;

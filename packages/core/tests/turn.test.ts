@@ -34,12 +34,13 @@ function createDeps(overrides?: {
 	isSttError?: (err: unknown) => err is SttErrorLike;
 	playAudioImpl?: (file: string) => Promise<void>;
 	speakImpl?: (text: string) => Promise<void>;
-	generateResponseImpl?: (input: {
-		transcript: string;
-		detectedLanguage?: string;
-		requestedLanguage?: "auto" | "en" | "ru";
-		timestampIso: string;
-		conversationContext?: ContextItem[];
+		generateResponseImpl?: (input: {
+			turn?: number;
+			transcript: string;
+			detectedLanguage?: string;
+			requestedLanguage?: "auto" | "en" | "ru";
+			timestampIso: string;
+			conversationContext?: ContextItem[];
 	}) => Promise<{
 		text: string;
 		language: "en" | "ru";
@@ -171,12 +172,13 @@ describe("createSttTriggerHandler", () => {
 		expect(playInputStartCue).toHaveBeenCalledTimes(1);
 		expect(recordAudioFixed).toHaveBeenCalledWith("/tmp/audio/test-1000.wav", 5);
 		expect(playAudio).toHaveBeenCalledWith("/tmp/audio/test-1000.wav");
-		expect(generateResponse).toHaveBeenCalledWith({
-			transcript: "hello world",
-			detectedLanguage: "en",
-			requestedLanguage: "en",
-			timestampIso: "2026-02-14T00:00:00.000Z",
-		});
+			expect(generateResponse).toHaveBeenCalledWith({
+				turn: 1,
+				transcript: "hello world",
+				detectedLanguage: "en",
+				requestedLanguage: "en",
+				timestampIso: "2026-02-14T00:00:00.000Z",
+			});
 		expect(onUserUtterance).toHaveBeenCalledWith({
 			turn: 1,
 			text: "hello world",
@@ -238,12 +240,13 @@ describe("createSttTriggerHandler", () => {
 		await handleTrigger();
 
 		expect(getConversationContext).toHaveBeenCalledTimes(1);
-		expect(generateResponse).toHaveBeenCalledWith({
-			transcript: "What is my name?",
-			detectedLanguage: "en",
-			requestedLanguage: "auto",
-			timestampIso: "2026-02-14T00:00:00.000Z",
-			conversationContext: [
+			expect(generateResponse).toHaveBeenCalledWith({
+				turn: 1,
+				transcript: "What is my name?",
+				detectedLanguage: "en",
+				requestedLanguage: "auto",
+				timestampIso: "2026-02-14T00:00:00.000Z",
+				conversationContext: [
 				{ role: "user", text: "My name is Pavel.", turn: 1 },
 				{ role: "assistant", text: "Nice to meet you, Pavel.", turn: 1 },
 			],

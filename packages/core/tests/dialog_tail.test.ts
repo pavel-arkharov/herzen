@@ -77,4 +77,47 @@ describe("formatDialogEvent", () => {
 		expect(actionLines).toContain("```json");
 		expect(errorLines).toEqual(["Error [response:RUNTIME_UNAVAILABLE]: Connection refused"]);
 	});
+
+	it("suppresses noisy follow-up action_call events and preserves turn headers", () => {
+		const state = {};
+
+		const suppressed = formatDialogEvent(
+			{
+				type: "action_call",
+				turn: 2,
+				integration: "core.followup",
+				operation: "turn_started",
+				args: { index: 1, remainingWindowMs: 7999 },
+			},
+			state,
+		);
+		const nextUtterance = formatDialogEvent(
+			{
+				type: "assistant_utterance",
+				turn: 2,
+				text: "I am listening.",
+			},
+			state,
+		);
+
+		expect(suppressed).toEqual([]);
+		expect(nextUtterance).toEqual(["", "Turn 2", "Herzen: I am listening."]);
+	});
+
+	it("formats follow-up action_result without verbose json payload", () => {
+		const state = {};
+
+		const lines = formatDialogEvent(
+			{
+				type: "action_result",
+				turn: 3,
+				integration: "core.followup",
+				operation: "window_closed",
+				result: { reason: "window_elapsed", executedTurns: 3 },
+			},
+			state,
+		);
+
+		expect(lines).toEqual(["", "Turn 3", "Action result: core.followup.window_closed"]);
+	});
 });

@@ -47,6 +47,9 @@ importers:
       '@herzen/dialog':
         specifier: workspace:*
         version: link:../dialog
+      '@herzen/integration-homeassistant':
+        specifier: workspace:*
+        version: link:../integration-homeassistant
       '@herzen/stt':
         specifier: workspace:*
         version: link:../stt
@@ -58,6 +61,8 @@ importers:
         version: link:../wakeword
 
   packages/dialog: {}
+
+  packages/integration-homeassistant: {}
 
   packages/stt: {}
 

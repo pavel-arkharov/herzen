@@ -6,6 +6,7 @@ import {
 	recordWav,
 } from "@herzen/audio";
 import { createResponseService } from "@herzen/dialog";
+import { createHomeAssistantService } from "@herzen/integration-homeassistant";
 import { transcribeWav, SttError } from "@herzen/stt";
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
@@ -198,6 +199,12 @@ function createHandleTrigger(
 	}
 	const contextWindow = new ConversationContextWindow(contextConfig);
 	const responseService = resolveResponseService(getRuntimeEnv());
+	const homeAssistantService = resolveHomeAssistantService(getRuntimeEnv());
+	if (homeAssistantService?.enabled) {
+		runtimeLogger.log("Home Assistant integration: enabled.");
+	} else {
+		runtimeLogger.log("Home Assistant integration: disabled (set HERZEN_HA_ENABLED=1 to enable).");
+	}
 	const onUserUtterance = async (event: UserUtteranceRecord) => {
 		await journal?.recordUserUtterance(event);
 	};
@@ -212,6 +219,42 @@ function createHandleTrigger(
 		details?: Record<string, unknown>;
 	}) => {
 		await journal?.recordError(event);
+	};
+
+	const recordActionCall = async (
+		turnNumber: number,
+		integration: string,
+		operation: string,
+		args: Record<string, unknown>,
+	): Promise<void> => {
+		try {
+			await journal?.recordActionCall({
+				turn: turnNumber,
+				integration,
+				operation,
+				args,
+			});
+		} catch (err) {
+			sttTurnLogger.error("Failed to write action_call journal event:", err);
+		}
+	};
+
+	const recordActionResult = async (
+		turnNumber: number,
+		integration: string,
+		operation: string,
+		result: Record<string, unknown>,
+	): Promise<void> => {
+		try {
+			await journal?.recordActionResult({
+				turn: turnNumber,
+				integration,
+				operation,
+				result,
+			});
+		} catch (err) {
+			sttTurnLogger.error("Failed to write action_result journal event:", err);
+		}
 	};
 
 	const turnDeps: TriggerTurnDependencies = {
@@ -235,8 +278,49 @@ function createHandleTrigger(
 		},
 		transcribeWav,
 		isSttError: (err): err is SttError => err instanceof SttError,
-		generateResponse: responseService
-			? (input) => {
+		generateResponse:
+			responseService || homeAssistantService?.enabled ?
+				async (input) => {
+					const turn = typeof input.turn === "number" ? input.turn : undefined;
+					if (homeAssistantService?.enabled) {
+						const handledAction = await homeAssistantService.handleTranscript(input.transcript);
+						if (handledAction) {
+							if (turn) {
+								await recordActionCall(
+									turn,
+									handledAction.integration,
+									handledAction.operation,
+									handledAction.args,
+								);
+								await recordActionResult(
+									turn,
+									handledAction.integration,
+									handledAction.operation,
+									{
+										ok: handledAction.result.ok,
+										code: handledAction.result.code,
+										statusCode: handledAction.result.statusCode,
+										message: handledAction.result.message,
+										entity_id: handledAction.entityId || undefined,
+										matchedAlias: handledAction.matchedAlias,
+									},
+								);
+							}
+							return {
+								text: handledAction.assistantText,
+								language: handledAction.language,
+								provider: handledAction.integration,
+								model: handledAction.operation,
+								durationMs: handledAction.durationMs,
+							};
+						}
+					}
+					if (!responseService) {
+						throw {
+							code: "RESPONSE_UNAVAILABLE",
+							message: "LLM response service unavailable.",
+						};
+					}
 					return responseService.generateReply(input);
 				}
 			: undefined,
@@ -270,40 +354,6 @@ function createHandleTrigger(
 		return outcome;
 	};
 
-	const recordFollowupActionCall = async (
-		turnNumber: number,
-		operation: string,
-		args: Record<string, unknown>,
-	): Promise<void> => {
-		try {
-			await journal?.recordActionCall({
-				turn: turnNumber,
-				integration: "core.followup",
-				operation,
-				args,
-			});
-		} catch (err) {
-			sttTurnLogger.error("Failed to write follow-up action_call journal event:", err);
-		}
-	};
-
-	const recordFollowupActionResult = async (
-		turnNumber: number,
-		operation: string,
-		result: Record<string, unknown>,
-	): Promise<void> => {
-		try {
-			await journal?.recordActionResult({
-				turn: turnNumber,
-				integration: "core.followup",
-				operation,
-				result,
-			});
-		} catch (err) {
-			sttTurnLogger.error("Failed to write follow-up action_result journal event:", err);
-		}
-	};
-
 	return async () => {
 		const initialTurn = await runTurn({ mode: "trigger" });
 		const followupResult = await runFollowupSession({
@@ -314,39 +364,44 @@ function createHandleTrigger(
 			isStopPhrase: (transcript) => isFollowupStopPhrase(transcript, followupConfig.stopPhrases),
 			callbacks: {
 				onWindowOpened: async (event) => {
-					runtimeLogger.log(
-						`Follow-up window opened (${event.windowSeconds.toFixed(1)}s, max turns ${event.maxTurns}).`,
-					);
-					await recordFollowupActionCall(initialTurn.turn, "window_opened", {
-						windowSeconds: event.windowSeconds,
-						maxTurns: event.maxTurns,
-						stopPhrases: followupConfig.stopPhrases,
-					});
-				},
+						runtimeLogger.log(
+							`Follow-up window opened (${event.windowSeconds.toFixed(1)}s, max turns ${event.maxTurns}).`,
+						);
+						await recordActionCall(initialTurn.turn, "core.followup", "window_opened", {
+							windowSeconds: event.windowSeconds,
+							maxTurns: event.maxTurns,
+							stopPhrases: followupConfig.stopPhrases,
+						});
+					},
 				onTurnStarted: async (event) => {
-					runtimeLogger.log(
-						`Follow-up turn ${event.index} started (${Math.round(event.remainingWindowMs)}ms remaining).`,
-					);
-					await recordFollowupActionCall(initialTurn.turn + event.index, "turn_started", {
-						index: event.index,
-						remainingWindowMs: Math.round(event.remainingWindowMs),
-					});
-				},
-				onTurnCompleted: async (event) => {
-					runtimeLogger.log(
-						`Follow-up turn ${event.index} completed (hasTranscript=${event.outcome.hasTranscript ? "1" : "0"}).`,
-					);
-					await recordFollowupActionResult(event.outcome.turn, "turn_completed", {
-						index: event.index,
-						hasTranscript: event.outcome.hasTranscript,
-					});
-				},
-				onWindowClosed: async (event) => {
-					runtimeLogger.log(`Follow-up window closed (${event.reason}).`);
-					await recordFollowupActionResult(event.lastTurn, "window_closed", {
-						reason: event.reason,
-						executedTurns: event.executedTurns,
-					});
+						runtimeLogger.log(
+							`Follow-up turn ${event.index} started (${Math.round(event.remainingWindowMs)}ms remaining).`,
+						);
+						await recordActionCall(
+							initialTurn.turn + event.index,
+							"core.followup",
+							"turn_started",
+							{
+								index: event.index,
+								remainingWindowMs: Math.round(event.remainingWindowMs),
+							},
+						);
+					},
+					onTurnCompleted: async (event) => {
+						runtimeLogger.log(
+							`Follow-up turn ${event.index} completed (hasTranscript=${event.outcome.hasTranscript ? "1" : "0"}).`,
+						);
+						await recordActionResult(event.outcome.turn, "core.followup", "turn_completed", {
+							index: event.index,
+							hasTranscript: event.outcome.hasTranscript,
+						});
+					},
+					onWindowClosed: async (event) => {
+						runtimeLogger.log(`Follow-up window closed (${event.reason}).`);
+						await recordActionResult(event.lastTurn, "core.followup", "window_closed", {
+							reason: event.reason,
+							executedTurns: event.executedTurns,
+						});
 					try {
 						await playConversationClosedCue();
 					} catch (err) {
@@ -371,6 +426,19 @@ function resolveResponseService(env: NodeJS.ProcessEnv) {
 			sttTurnLogger.error(`LLM response disabled (${err.code}): ${err.message}`);
 		} else {
 			sttTurnLogger.error("Failed to initialize LLM response service:", err);
+		}
+		return null;
+	}
+}
+
+function resolveHomeAssistantService(env: NodeJS.ProcessEnv) {
+	try {
+		return createHomeAssistantService({ env });
+	} catch (err) {
+		if (err instanceof Error) {
+			sttTurnLogger.error(`Home Assistant integration disabled: ${err.message}`);
+		} else {
+			sttTurnLogger.error("Home Assistant integration disabled:", err);
 		}
 		return null;
 	}

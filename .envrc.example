@@ -8,3 +8,14 @@ export HERZEN_PLAYBACK="0"
 # Wakeword sidecar mode (optional)
 # export HERZEN_TRIGGER_MODE="wakeword"
 # export HERZEN_WAKEWORD_SOCKET="$(cd "$HERZEN_ROOT/.." && pwd)/herzen-wake/run/wakeword.sock"
+
+# Home Assistant integration (optional, recommended: file-based secrets)
+# export HERZEN_HA_ENABLED="1"
+# export HERZEN_HA_SECRETS_DIR="$HERZEN_ROOT/data/secrets/home_assistant"
+# export HERZEN_HA_DEFAULT_LIGHT="light.kitchen"
+# export HERZEN_HA_LIGHT_ALIASES="kitchen=light.kitchen_main|light.kitchen_accent,living room=light.living_room,кухня=light.kitchen_main|light.kitchen_accent"
+# export HERZEN_HA_SCENE_ALIASES="bedroom reading=scene.bedroom_reading,movie time=scene.movie_time"
+# export HERZEN_HA_TIMEOUT_MS="5000"
+# Alternative to HERZEN_HA_SECRETS_DIR:
+# export HERZEN_HA_BASE_URL_FILE="$HERZEN_ROOT/data/secrets/home_assistant/base_url"
+# export HERZEN_HA_TOKEN_FILE="$HERZEN_ROOT/data/secrets/home_assistant/token"

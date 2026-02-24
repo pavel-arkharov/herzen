@@ -2,8 +2,7 @@
 
 This document lists the current packages in the Herzen monorepo.
 
-**core**, **audio**, **stt**, **tts**, **vad**, **wakeword**, and **dialog** are currently implemented.
-Other packages (integrations) will be added later.
+**core**, **audio**, **stt**, **tts**, **vad**, **wakeword**, **dialog**, and **integration-homeassistant** are currently implemented.
 
 ---
 
@@ -115,6 +114,10 @@ Current behavior (prototype):
   - `HERZEN_FOLLOWUP_MAX_TURNS` (default `3`)
   - `HERZEN_FOLLOWUP_STOP_PHRASES` (optional CSV, normalized exact match)
   - follow-up closes on timeout, no speech, stop phrase, max turns, or turn error
+- routes deterministic Home Assistant actions before LLM generation when `HERZEN_HA_ENABLED=1`
+  - light actions: `light.turn_on`, `light.turn_off`
+  - scene actions: `scene.turn_on`
+  - if no HA intent matches, falls through to `@herzen/dialog`
 - appends session-scoped conversation events (`session_started`, `user_utterance`, `assistant_utterance`, action placeholders, `error`, `session_ended`)
 - plays the recording only when `HERZEN_PLAYBACK=1`
 - speaks model-generated reply text via `@herzen/dialog` or a fallback message
@@ -258,6 +261,50 @@ Current environment surface:
 - `HERZEN_WAKEWORD_SOCKET` (optional socket path override)
 - `HERZEN_WAKEWORD_CONNECT_TIMEOUT_MS` (optional positive integer, default `3000`)
 - `HERZEN_DATA_DIR` (optional data-root override used in default socket path resolution)
+
+---
+
+## @herzen/integration-homeassistant
+
+**Purpose**  
+Deterministic local Home Assistant command adapter.
+
+This package is responsible for:
+
+- turning transcript text into explicit Home Assistant service calls
+- enforcing allowlisted entity scope (no free-form entity execution)
+- mapping room/scene aliases to HA entity IDs
+- returning structured action results for journaling and TTS feedback
+
+Current supported operations:
+
+- `light.turn_on`
+- `light.turn_off`
+- `scene.turn_on`
+
+Current environment surface:
+
+- `HERZEN_HA_ENABLED` (`0/1`, default `0`)
+- `HERZEN_HA_BASE_URL` or `HERZEN_HA_BASE_URL_FILE` or `HERZEN_HA_SECRETS_DIR/base_url`
+- `HERZEN_HA_TOKEN` or `HERZEN_HA_TOKEN_FILE` or `HERZEN_HA_SECRETS_DIR/token`
+- `HERZEN_HA_TIMEOUT_MS` (default `5000`)
+- `HERZEN_HA_ALLOWED_LIGHTS` (CSV of `light.*`)
+- `HERZEN_HA_LIGHT_ALIASES` (CSV `alias=light.a|light.b`)
+- `HERZEN_HA_SCENE_ALIASES` (CSV `alias=scene.x`)
+- `HERZEN_HA_DEFAULT_LIGHT` (single fallback light)
+
+Security behavior:
+
+- token files require owner-only permissions (`chmod 600`) on Unix-like systems
+- inline secrets are allowed but file-based secrets are recommended
+
+Operational behavior:
+
+- one transcript currently maps to one action
+- chaining/multi-action execution in a single utterance is not implemented yet
+
+See detailed usage and setup in:
+- `/Users/parkharo/Programming/herzen/docs/packages/integration-homeassistant.md`
 
 Current error model:
 - `CONFIG_INVALID`

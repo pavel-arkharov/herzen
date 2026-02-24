@@ -121,6 +121,9 @@ export async function findLatestSessionId(conversationsDir: string): Promise<str
 
 export function formatDialogEvent(event: Record<string, unknown>, renderState: DialogTailRenderState): string[] {
 	const lines: string[] = [];
+	const type = asOptionalString(event.type) ?? "unknown";
+	if (shouldSuppressActionEvent(type, event)) return lines;
+
 	const turn = asOptionalNumber(event.turn);
 	if (typeof turn === "number" && renderState.lastTurn !== turn) {
 		renderState.lastTurn = turn;
@@ -128,7 +131,6 @@ export function formatDialogEvent(event: Record<string, unknown>, renderState: D
 		lines.push(`Turn ${turn}`);
 	}
 
-	const type = asOptionalString(event.type) ?? "unknown";
 	switch (type) {
 		case "session_started": {
 			lines.push("");
@@ -152,6 +154,9 @@ export function formatDialogEvent(event: Record<string, unknown>, renderState: D
 			const integration = asOptionalString(event.integration) ?? "unknown";
 			const operation = asOptionalString(event.operation) ?? "unknown";
 			lines.push(`${type === "action_call" ? "Action call" : "Action result"}: ${integration}.${operation}`);
+			if (integration === "core.followup") {
+				return lines;
+			}
 			const payload = type === "action_call" ? asRecord(event.args) : asRecord(event.result);
 			if (payload) {
 				lines.push(...prettyJsonBlock(payload));
@@ -174,6 +179,14 @@ export function formatDialogEvent(event: Record<string, unknown>, renderState: D
 			lines.push(`Event ${type}: ${JSON.stringify(event)}`);
 			return lines;
 	}
+}
+
+function shouldSuppressActionEvent(type: string, event: Record<string, unknown>): boolean {
+	if (type !== "action_call") return false;
+	const integration = asOptionalString(event.integration);
+	if (integration !== "core.followup") return false;
+	const operation = asOptionalString(event.operation);
+	return operation === "window_opened" || operation === "turn_started";
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
