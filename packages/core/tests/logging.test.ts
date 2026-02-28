@@ -3,7 +3,7 @@ import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createLogger, toStructuredSttTurnEntry } from "../src/logging.js";
+import { createLogger, toStructuredSttTurnEntry } from "../src/observability/logging.js";
 
 async function readJsonl(file: string): Promise<Array<Record<string, unknown>>> {
 	try {
@@ -165,6 +165,45 @@ describe("createLogger", () => {
 
 			const entries = await readJsonl(join(logsDir, "runtime.jsonl"));
 			expect(entries).toEqual([{ seq: 1 }, { seq: 2 }]);
+		} finally {
+			await rm(logsDir, { recursive: true, force: true });
+		}
+	});
+
+	it("mirrors emitted logs into canonical events stream", async () => {
+		const logsDir = await mkdtemp(join(tmpdir(), "herzen-logs-events-"));
+		const consoleTarget = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+		try {
+			const logger = createLogger({
+				logsDir,
+				component: "core",
+				sessionId: "session-xyz",
+				consoleTarget,
+				nowIso: () => "2026-02-27T00:00:00.000Z",
+			});
+
+			logger.info("core.started", { message: "ready", phase: "boot" });
+			await logger.appendJsonl("turn_benchmark", { schemaVersion: "turn_benchmark.v1", turn: 2 });
+			await logger.drain();
+
+			const events = await readJsonl(join(logsDir, "events.jsonl"));
+			expect(events.length).toBeGreaterThanOrEqual(2);
+			const startedEvent = events.find((entry) => entry.category === "core.started");
+			const benchmarkEvent = events.find((entry) => entry.category === "stream.turn_benchmark");
+			expect(startedEvent).toMatchObject({
+				ts: "2026-02-27T00:00:00.000Z",
+				sessionId: "session-xyz",
+				source: "core",
+				category: "core.started",
+				severity: "info",
+			});
+			expect(benchmarkEvent).toMatchObject({
+				sessionId: "session-xyz",
+				source: "core",
+				category: "stream.turn_benchmark",
+				severity: "info",
+			});
 		} finally {
 			await rm(logsDir, { recursive: true, force: true });
 		}

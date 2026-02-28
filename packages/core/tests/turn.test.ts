@@ -2,11 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	createSttTriggerHandler,
 	type ResponseErrorLike,
+	runTextTurn,
 	runSttTurn,
 	type SttErrorLike,
 	type SttLogEntry,
 	type TurnOutcome,
-} from "../src/turn.js";
+} from "../src/app/turn.js";
 
 interface ContextItem {
 	role: "user" | "assistant";
@@ -47,6 +48,12 @@ function createDeps(overrides?: {
 		provider: string;
 		model: string;
 		durationMs: number;
+		actionPath?: "home_assistant" | "llm";
+		haIntentStartedAtMs?: number;
+		haIntentFinishedAtMs?: number;
+		llmStartedAtMs?: number;
+		llmFirstTokenAtMs?: number;
+		llmFinishedAtMs?: number;
 	}>;
 	isResponseError?: (err: unknown) => err is ResponseErrorLike;
 	conversationContext?: ContextItem[];
@@ -73,6 +80,7 @@ function createDeps(overrides?: {
 	const onUserUtterance = vi.fn(async () => {});
 	const onAssistantUtterance = vi.fn(async () => {});
 	const onError = vi.fn(async () => {});
+	const appendTurnBenchmark = vi.fn(async () => {});
 	const onTurnOutcome = overrides?.onTurnOutcome ?? vi.fn(async () => {});
 	const getConversationContext = vi.fn(() => overrides?.conversationContext ?? []);
 	const transcribeWav =
@@ -116,6 +124,7 @@ function createDeps(overrides?: {
 		onUserUtterance,
 		onAssistantUtterance,
 		onError,
+		appendTurnBenchmark,
 		playAudio,
 		speak,
 	};
@@ -133,6 +142,7 @@ function createDeps(overrides?: {
 		onUserUtterance,
 		onAssistantUtterance,
 		onError,
+		appendTurnBenchmark,
 		onTurnOutcome,
 		generateResponse,
 		getConversationContext,
@@ -140,6 +150,71 @@ function createDeps(overrides?: {
 }
 
 describe("createSttTriggerHandler", () => {
+	it("handles text ingress turns without audio capture", async () => {
+		const {
+			deps,
+			recordAudioFixed,
+			recordAudioAdaptive,
+			playInputStartCue,
+			playAudio,
+			generateResponse,
+			onUserUtterance,
+			onAssistantUtterance,
+			appendSttLog,
+		} = createDeps({
+			nowSequence: [1_000, 1_001, 1_002],
+		});
+
+		const outcome = await runTextTurn(deps, 7, "hello from tui", {
+			mode: "trigger",
+			triggerMode: "stdin",
+			traceId: "trace-1",
+			laneKey: "session:1:trigger",
+		});
+
+		expect(recordAudioFixed).not.toHaveBeenCalled();
+		expect(recordAudioAdaptive).not.toHaveBeenCalled();
+		expect(playInputStartCue).not.toHaveBeenCalled();
+		expect(playAudio).not.toHaveBeenCalled();
+		expect(generateResponse).toHaveBeenCalledWith(
+			expect.objectContaining({
+				turn: 7,
+				transcript: "hello from tui",
+				control: {
+					traceId: "trace-1",
+					laneKey: "session:1:trigger",
+				},
+			}),
+		);
+		expect(onUserUtterance).toHaveBeenCalledWith(
+			expect.objectContaining({
+				turn: 7,
+				text: "hello from tui",
+				ingressSource: "tui",
+			}),
+		);
+		expect(onAssistantUtterance).toHaveBeenCalledWith(
+			expect.objectContaining({
+				turn: 7,
+				text: "Model reply",
+				ingressSource: "tui",
+			}),
+		);
+		expect(appendSttLog).toHaveBeenCalledWith(
+			expect.objectContaining({
+				audioFile: "control.ingress",
+				transcript: "hello from tui",
+			}),
+		);
+		expect(outcome).toMatchObject({
+			turn: 7,
+			hasTranscript: true,
+			transcript: "hello from tui",
+			assistantText: "Model reply",
+			assistantSource: "model",
+		});
+	});
+
 	it("handles successful STT result and speaks model reply", async () => {
 		const {
 			deps,
@@ -182,6 +257,7 @@ describe("createSttTriggerHandler", () => {
 		expect(onUserUtterance).toHaveBeenCalledWith({
 			turn: 1,
 			text: "hello world",
+			ingressSource: "voice",
 			detectedLanguage: "en",
 			requestedLanguage: "en",
 		});
@@ -189,6 +265,7 @@ describe("createSttTriggerHandler", () => {
 			expect.objectContaining({
 				turn: 1,
 				text: "Model reply",
+				ingressSource: "voice",
 				language: "en",
 				provider: "ollama",
 				model: "qwen2.5:3b",
@@ -253,6 +330,80 @@ describe("createSttTriggerHandler", () => {
 		});
 	});
 
+	it("writes per-turn benchmark entry with timestamp checkpoints and metrics", async () => {
+		const triggerReceivedAtMs = 1_700_000_000_000;
+		const { deps, appendTurnBenchmark } = createDeps({
+			transcribeImpl: async () => ({
+				text: "hello benchmark",
+				language: "en",
+				durationMs: 140,
+			}),
+		});
+
+		await runSttTurn(deps, 1, {
+			mode: "trigger",
+			triggerMode: "wakeword",
+			triggerReceivedAtMs,
+		});
+
+		expect(appendTurnBenchmark).toHaveBeenCalledTimes(1);
+		const benchmarkEntry = appendTurnBenchmark.mock.calls[0]?.[0];
+		expect(benchmarkEntry).toMatchObject({
+			schemaVersion: "turn_benchmark.v1",
+			turn: 1,
+			triggerMode: "wakeword",
+			invocationMode: "trigger",
+			actionPath: "llm",
+			language: "en",
+			trigger_received: new Date(triggerReceivedAtMs).toISOString(),
+			hasTranscript: true,
+			transcriptChars: "hello benchmark".length,
+			llmOutcome: "ok",
+		});
+		expect(benchmarkEntry.recording_started).toBeTypeOf("string");
+		expect(benchmarkEntry.recording_finished).toBeTypeOf("string");
+		expect(benchmarkEntry.stt_started).toBeTypeOf("string");
+		expect(benchmarkEntry.stt_finished).toBeTypeOf("string");
+		expect(benchmarkEntry.llm_started).toBeTypeOf("string");
+		expect(benchmarkEntry.llm_finished).toBeTypeOf("string");
+		expect(benchmarkEntry.tts_started).toBeTypeOf("string");
+		expect(benchmarkEntry.tts_first_audio_sample).toBeTypeOf("string");
+		expect(benchmarkEntry.tts_finished).toBeTypeOf("string");
+		expect(typeof benchmarkEntry.stt_ms).toBe("number");
+		expect(typeof benchmarkEntry.llm_ms).toBe("number");
+		expect(typeof benchmarkEntry.tts_ms).toBe("number");
+		expect(typeof benchmarkEntry.end_to_end_ms).toBe("number");
+		expect(typeof benchmarkEntry.speak_tail_ms).toBe("number");
+	});
+
+	it("captures Home Assistant timing in benchmark when action path is home_assistant", async () => {
+		const { deps, appendTurnBenchmark } = createDeps({
+			generateResponseImpl: async () => ({
+				text: "Done.",
+				language: "en",
+				provider: "home_assistant",
+				model: "light.turn_on",
+				durationMs: 85,
+				actionPath: "home_assistant",
+				haIntentStartedAtMs: 1000,
+				haIntentFinishedAtMs: 1085,
+			}),
+		});
+
+		await runSttTurn(deps, 1, {
+			mode: "trigger",
+			triggerMode: "stdin",
+		});
+
+		const benchmarkEntry = appendTurnBenchmark.mock.calls[0]?.[0];
+		expect(benchmarkEntry).toMatchObject({
+			actionPath: "home_assistant",
+			ha_intent_started: new Date(1000).toISOString(),
+			ha_intent_finished: new Date(1085).toISOString(),
+			ha_intent_ms: 85,
+		});
+	});
+
 	it("uses fallback speech when response generation fails", async () => {
 		const responseErr = { code: "RUNTIME_UNAVAILABLE", message: "Ollama unavailable" };
 		const { deps, logger, appendSttLog, speak, onError, onAssistantUtterance, onTurnOutcome } = createDeps({
@@ -282,6 +433,7 @@ describe("createSttTriggerHandler", () => {
 			expect.objectContaining({
 				turn: 1,
 				text: "[en] I heard you, but I can't respond right now.",
+				ingressSource: "voice",
 				language: "en",
 			}),
 		);

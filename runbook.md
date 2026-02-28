@@ -113,13 +113,13 @@ Important Linux limitation right now:
 If the repository is not on your machine yet:
 
 ```bash
-git clone https://github.com/pavel-arkharov/herzen.git /Users/parkharo/Programming/herzen
+git clone https://github.com/pavel-arkharov/herzen.git herzen
 ```
 
 From the repo root:
 
 ```bash
-cd /Users/parkharo/Programming/herzen
+cd herzen
 pnpm install
 ```
 
@@ -139,20 +139,20 @@ ollama --version
 Create model folder:
 
 ```bash
-mkdir -p /Users/parkharo/Programming/herzen/data/models
+mkdir -p data/models
 ```
 
 Download Whisper model:
 
 ```bash
 curl -L \
-  -o /Users/parkharo/Programming/herzen/data/models/ggml-base.bin \
+  -o data/models/ggml-base.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
 ```
 
 For adaptive mode (`@herzen/vad`), also place a Silero VAD model at:
 
-- `/Users/parkharo/Programming/herzen/data/models/silero_vad.onnx`
+- `data/models/silero_vad.onnx`
 
 If you do not have this yet, you can still run Herzen in `fixed` mode.
 
@@ -163,13 +163,13 @@ If you do not have this yet, you can still run Herzen in `fixed` mode.
 Easiest path in this repo:
 
 ```bash
-cp /Users/parkharo/Programming/herzen/.envrc.example /Users/parkharo/Programming/herzen/.envrc
+cp .envrc.example .envrc
 ```
 
-Edit `/Users/parkharo/Programming/herzen/.envrc` and ensure at least:
+Edit `.envrc` and ensure at least:
 
 - `HERZEN_WHISPER_BIN="/opt/homebrew/bin/whisper-cli"`
-- `HERZEN_WHISPER_MODEL="/Users/parkharo/Programming/herzen/data/models/ggml-base.bin"`
+- `HERZEN_WHISPER_MODEL="<repo-root>/data/models/ggml-base.bin"`
 
 Add response model config (recommended):
 
@@ -177,12 +177,12 @@ Add response model config (recommended):
 
 Optional adaptive VAD path (if different from default):
 
-- `HERZEN_VAD_MODEL="/Users/parkharo/Programming/herzen/data/models/silero_vad.onnx"`
+- `HERZEN_VAD_MODEL="<repo-root>/data/models/silero_vad.onnx"`
 
 Load env variables for the current terminal:
 
 ```bash
-source /Users/parkharo/Programming/herzen/.envrc
+source .envrc
 ```
 
 If you use `direnv`, run `direnv allow` instead.
@@ -252,6 +252,20 @@ Then:
 2. Speak
 3. Wait for transcription and spoken reply
 
+Operator mode (recommended once core is running):
+
+1. Open Terminal C
+2. Run:
+
+```bash
+pnpm tui
+```
+
+3. Use the bottom composer in TUI:
+   - type text
+   - press Enter to send
+   - watch replies in `Chat`, execution in `Actions`, and timings in `Perf`
+
 ---
 
 ## 9. Optional Modes
@@ -289,7 +303,7 @@ pnpm transcribe:file -- --input "meeting.m4a" --out "data/transcribes/meeting.tx
 
 Default output folder:
 
-- `/Users/parkharo/Programming/herzen/data/transcribes`
+- `data/transcribes`
 
 ---
 

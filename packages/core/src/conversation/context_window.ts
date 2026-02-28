@@ -63,6 +63,20 @@ export class ConversationContextWindow {
 		this.items = [];
 	}
 
+	replace(items: ConversationContextItem[]): void {
+		if (!this.config.enabled) {
+			this.items = [];
+			return;
+		}
+		this.items = items
+			.map((item) => ({
+				...item,
+				text: item.text.trim(),
+			}))
+			.filter((item) => item.text.length > 0);
+		this.trimToLimits();
+	}
+
 	private append(
 		role: ConversationContextItem["role"],
 		turn: number,

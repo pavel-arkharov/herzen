@@ -4,13 +4,14 @@ General documents live at the docs root. Topic-specific docs are grouped in subf
 
 ## General
 
-- /Users/parkharo/Programming/herzen/runbook.md
-- /Users/parkharo/Programming/herzen/docs/design_principles.md
+- runbook.md
+- docs/design_principles.md
 
 ## Architecture
 
-- /Users/parkharo/Programming/herzen/docs/architecture/overview.md
-- /Users/parkharo/Programming/herzen/docs/architecture/wakeword_sidecar_contract.md
+- docs/architecture/overview.md
+- docs/architecture/wakeword_sidecar_contract.md
+- docs/architecture/v1_control_plane_intent_context.md
 
 Related external repo:
 
@@ -18,43 +19,45 @@ Related external repo:
 
 ## Internal
 
-- /Users/parkharo/Programming/herzen/docs/internal/adaptive_vad_failure_guide.md
+- docs/internal/adaptive_vad_failure_guide.md
 
 ## Packages
 
-- /Users/parkharo/Programming/herzen/docs/packages/overview.md
-- /Users/parkharo/Programming/herzen/docs/packages/dialog.md
-- /Users/parkharo/Programming/herzen/docs/packages/integration-homeassistant.md
-- /Users/parkharo/Programming/herzen/docs/packages/stt.md
-- /Users/parkharo/Programming/herzen/docs/packages/tts.md
-- /Users/parkharo/Programming/herzen/docs/packages/vad.md
+- docs/packages/overview.md
+- docs/packages/core.md
+- docs/packages/tui.md
+- docs/packages/dialog.md
+- docs/packages/integration-homeassistant.md
+- docs/packages/stt.md
+- docs/packages/tts.md
+- docs/packages/vad.md
 
 ## Hardware
 
-- /Users/parkharo/Programming/herzen/docs/hardware/strategy.md
+- docs/hardware/strategy.md
 
 ## Tests
 
-- /Users/parkharo/Programming/herzen/docs/tests/testing_approach.md
+- docs/tests/testing_approach.md
 
 ## Process
 
-- /Users/parkharo/Programming/herzen/docs/process/task_execution_strategy.md
+- docs/process/task_execution_strategy.md
 
 ## Audits (gitignored)
 
-- /Users/parkharo/Programming/herzen/docs/audit/
+- docs/audit/
 
 Audit notes are local working artifacts and are intentionally not tracked.
 
 ## Skills (gitignored)
 
-- /Users/parkharo/Programming/herzen/docs/skills/
+- docs/skills/
 
 Skill prompts are local working artifacts and are intentionally not tracked.
 
 ## Tasks (gitignored)
 
-- /Users/parkharo/Programming/herzen/docs/tasks/
+- docs/tasks/
 
 Task prompts and execution notes are local working artifacts and are intentionally not tracked.

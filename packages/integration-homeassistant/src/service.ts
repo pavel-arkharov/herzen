@@ -3,9 +3,13 @@ import {
 	normalizeMatchText,
 	resolveHomeAssistantConfig,
 	type HomeAssistantConfig,
+	type HomeAssistantConfigOverrides,
 } from "./config.js";
 import {
 	HomeAssistantError,
+	type HomeAssistantCommandExecutionResult,
+	type HomeAssistantCommandInput,
+	type HomeAssistantCommandName,
 	type HomeAssistantHandledAction,
 	type HomeAssistantService,
 	type HomeIntent,
@@ -16,6 +20,7 @@ import {
 interface CreateHomeAssistantServiceOptions {
 	env?: NodeJS.ProcessEnv;
 	fetchImpl?: typeof fetch;
+	settings?: HomeAssistantConfigOverrides;
 }
 
 interface ServiceResponse {
@@ -48,12 +53,25 @@ const OFF_PHRASES = [
 export function createHomeAssistantService(
 	options: CreateHomeAssistantServiceOptions = {},
 ): HomeAssistantService {
-	const config = resolveHomeAssistantConfig(options.env ?? process.env);
+	const config = resolveHomeAssistantConfig(options.env ?? process.env, options.settings);
 	const fetchImpl = options.fetchImpl ?? fetch;
 	const allowedSet = new Set(config.allowedLights);
 
 	return {
 		enabled: config.enabled,
+		executeCommand: async (command: HomeAssistantCommandInput): Promise<HomeAssistantCommandExecutionResult> => {
+			const language = detectLanguage(command.languageHint ?? "");
+			if (!config.enabled) {
+				return buildDisabledCommandResult(command.name, command.args, language);
+			}
+
+			const action = mapCommandToAction(command);
+			if (!action) {
+				return buildInvalidCommandResult(command.name, command.args, language);
+			}
+
+			return executeResolvedAction(fetchImpl, config, action, language);
+		},
 		handleTranscript: async (transcript: string): Promise<HomeAssistantHandledAction | null> => {
 			if (!config.enabled) return null;
 
@@ -66,21 +84,7 @@ export function createHomeAssistantService(
 			}
 
 			const action = mapIntentToAction(intent);
-			const startedAt = Date.now();
-			const serviceResponse = await callHomeAssistantService(fetchImpl, config, action);
-			const durationMs = Date.now() - startedAt;
-
-			return {
-				integration: "home_assistant",
-				operation: action.operation,
-				entityId: action.entityId,
-				matchedAlias: intent.matchedAlias,
-				assistantText: buildAssistantText(action, serviceResponse, language),
-				language,
-				durationMs,
-				args: action.payload,
-				result: serviceResponse,
-			};
+			return executeResolvedAction(fetchImpl, config, action, language, intent.matchedAlias);
 		},
 	};
 }
@@ -163,6 +167,49 @@ function mapIntentToAction(intent: HomeIntent): HomeAction {
 			entity_id: entityPayload,
 		},
 	};
+}
+
+function mapCommandToAction(command: HomeAssistantCommandInput): HomeAction | null {
+	const entityIds = normalizeCommandEntityIds(command.args.entity_id);
+	if (entityIds.length === 0) return null;
+
+	if (command.name === "homeassistant.scene.turn_on") {
+		const sceneId = entityIds[0] ?? "";
+		if (!sceneId) return null;
+		return {
+			operation: "scene.turn_on",
+			entityId: sceneId,
+			targetLabel: sceneId,
+			payload: {
+				entity_id: sceneId,
+			},
+		};
+	}
+
+	const entityId = entityIds[0] ?? "";
+	const payloadEntityId = entityIds.length === 1 ? entityId : entityIds;
+	return {
+		operation: command.name === "homeassistant.light.turn_on" ? "light.turn_on" : "light.turn_off",
+		entityId,
+		targetLabel: humanLightTarget(entityIds),
+		payload: {
+			entity_id: payloadEntityId,
+		},
+	};
+}
+
+function normalizeCommandEntityIds(raw: string | string[]): string[] {
+	if (typeof raw === "string") {
+		const normalized = raw.trim().toLowerCase();
+		return normalized ? [normalized] : [];
+	}
+	const entityIds: string[] = [];
+	for (const item of raw) {
+		const normalized = item.trim().toLowerCase();
+		if (!normalized) continue;
+		entityIds.push(normalized);
+	}
+	return [...new Set(entityIds)];
 }
 
 function resolveFallbackLightEntityIds(config: HomeAssistantConfig): string[] {
@@ -249,6 +296,84 @@ async function callHomeAssistantService(
 		ok: true,
 		statusCode: response.status,
 	};
+}
+
+async function executeResolvedAction(
+	fetchImpl: typeof fetch,
+	config: HomeAssistantConfig,
+	action: HomeAction,
+	language: "en" | "ru",
+	matchedAlias?: string,
+): Promise<HomeAssistantCommandExecutionResult> {
+	const startedAt = Date.now();
+	const serviceResponse = await callHomeAssistantService(fetchImpl, config, action);
+	const durationMs = Date.now() - startedAt;
+
+	return {
+		integration: "home_assistant",
+		operation: action.operation,
+		entityId: action.entityId,
+		matchedAlias,
+		assistantText: buildAssistantText(action, serviceResponse, language),
+		language,
+		durationMs,
+		args: action.payload,
+		result: serviceResponse,
+	};
+}
+
+function buildDisabledCommandResult(
+	name: HomeAssistantCommandName,
+	args: { entity_id: string | string[] },
+	language: "en" | "ru",
+): HomeAssistantCommandExecutionResult {
+	return {
+		integration: "home_assistant",
+		operation: toOperationName(name),
+		entityId: "",
+		assistantText:
+			language === "ru"
+				? "[ru] Интеграция Home Assistant отключена."
+				: "[en] Home Assistant integration is disabled.",
+		language,
+		durationMs: 0,
+		args,
+		result: {
+			ok: false,
+			code: "RUNTIME_UNAVAILABLE",
+			message: "Home Assistant integration is disabled.",
+		},
+	};
+}
+
+function buildInvalidCommandResult(
+	name: HomeAssistantCommandName,
+	args: { entity_id: string | string[] },
+	language: "en" | "ru",
+): HomeAssistantCommandExecutionResult {
+	return {
+		integration: "home_assistant",
+		operation: toOperationName(name),
+		entityId: "",
+		assistantText:
+			language === "ru"
+				? "[ru] Не удалось распознать цель команды."
+				: "[en] I couldn't resolve that command target.",
+		language,
+		durationMs: 0,
+		args,
+		result: {
+			ok: false,
+			code: "RESPONSE_INVALID",
+			message: "Invalid command arguments.",
+		},
+	};
+}
+
+function toOperationName(name: HomeAssistantCommandName): "light.turn_on" | "light.turn_off" | "scene.turn_on" {
+	if (name === "homeassistant.light.turn_on") return "light.turn_on";
+	if (name === "homeassistant.light.turn_off") return "light.turn_off";
+	return "scene.turn_on";
 }
 
 async function fetchWithTimeout(

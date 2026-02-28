@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const PACKAGE_DIR_BY_NAME = {
+	"@herzen/core": "packages/core",
 	"@herzen/dialog": "packages/dialog",
 	"@herzen/integration-homeassistant": "packages/integration-homeassistant",
 	"@herzen/tts": "packages/tts",

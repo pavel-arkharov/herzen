@@ -2,7 +2,7 @@
 
 This document lists the current packages in the Herzen monorepo.
 
-**core**, **audio**, **stt**, **tts**, **vad**, **wakeword**, **dialog**, and **integration-homeassistant** are currently implemented.
+**core**, **audio**, **stt**, **tts**, **vad**, **wakeword**, **dialog**, **integration-homeassistant**, and **tui** are currently implemented.
 
 ---
 
@@ -122,6 +122,9 @@ Current behavior (prototype):
 - plays the recording only when `HERZEN_PLAYBACK=1`
 - speaks model-generated reply text via `@herzen/dialog` or a fallback message
 
+Detailed package notes:
+- `docs/packages/core.md`
+
 ---
 
 ## @herzen/stt
@@ -192,7 +195,7 @@ Current error model:
 - runtime: `RUNTIME_MISSING`, `MODEL_INVALID`, `INFERENCE_FAILED`
 
 See detailed package notes in:
-- `/Users/parkharo/Programming/herzen/docs/packages/vad.md`
+- `docs/packages/vad.md`
 
 ---
 
@@ -304,7 +307,7 @@ Operational behavior:
 - chaining/multi-action execution in a single utterance is not implemented yet
 
 See detailed usage and setup in:
-- `/Users/parkharo/Programming/herzen/docs/packages/integration-homeassistant.md`
+- `docs/packages/integration-homeassistant.md`
 
 Current error model:
 - `CONFIG_INVALID`
@@ -358,6 +361,38 @@ Current error model:
 - `RUNTIME_UNAVAILABLE`
 - `GENERATION_FAILED`
 - `OUTPUT_INVALID`
+
+---
+
+## @herzen/tui
+
+**Purpose**  
+Operator terminal UI with live feeds, runtime setting controls, and text ingress composer.
+
+This package is responsible for:
+
+- rendering live chat/action/perf/status panels from runtime logs
+- emitting `control.ingress.v1` `chat.send` events into `data/control/ingress.jsonl`
+- exposing runtime-safe setting toggles persisted to `data/control/runtime_settings.json`
+
+Current panel layout:
+
+- Header
+- Tab strip (`Chat`, `Actions`, `Perf`, `Settings`)
+- Main panel
+- Composer row
+- Footer status line
+
+Current keybindings:
+
+- `1`, `2`, `3`, `s` to switch panels
+- `j`, `k` for settings navigation
+- `Enter` to send composer text (or toggle setting when composer is empty in Settings panel)
+- `Esc` to clear composer
+- `Ctrl+C` to quit
+
+See package details in:
+- `docs/packages/tui.md`
 
 ---
 

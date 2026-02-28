@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ConversationContextWindow, resolveContextWindowConfig } from "../src/context_window.js";
+import { ConversationContextWindow, resolveContextWindowConfig } from "../src/conversation/context_window.js";
 
 describe("ConversationContextWindow", () => {
 	it("keeps context items in chronological append order", () => {

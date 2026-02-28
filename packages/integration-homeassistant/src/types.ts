@@ -58,7 +58,23 @@ export interface HomeAssistantHandledAction {
 	result: HomeAssistantActionResult;
 }
 
+export type HomeAssistantCommandName =
+	| "homeassistant.light.turn_on"
+	| "homeassistant.light.turn_off"
+	| "homeassistant.scene.turn_on";
+
+export interface HomeAssistantCommandInput {
+	name: HomeAssistantCommandName;
+	args: {
+		entity_id: string | string[];
+	};
+	languageHint?: string;
+}
+
+export interface HomeAssistantCommandExecutionResult extends HomeAssistantHandledAction {}
+
 export interface HomeAssistantService {
 	readonly enabled: boolean;
+	executeCommand: (input: HomeAssistantCommandInput) => Promise<HomeAssistantCommandExecutionResult>;
 	handleTranscript: (transcript: string) => Promise<HomeAssistantHandledAction | null>;
 }

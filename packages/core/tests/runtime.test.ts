@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createRuntime } from "../src/runtime.js";
+import { createRuntime } from "../src/app/runtime.js";
 import { TriggerError, type TriggerEvent, type TriggerMode, type TriggerSource } from "../src/trigger/types.js";
 
 class SequenceTriggerSource implements TriggerSource {

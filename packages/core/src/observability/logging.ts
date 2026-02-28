@@ -1,7 +1,9 @@
 import { mkdirSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { SttLogEntry } from "./turn.js";
+import { createObservabilityEventEnvelope } from "./envelope.js";
+import type { SttLogEntry } from "../app/turn.js";
+import { resolveSettings } from "../settings/registry.js";
 
 export type LogLevel = "info" | "warn" | "error";
 export type LogComponent = "core" | "stt" | "trigger" | "tts";
@@ -21,6 +23,7 @@ export interface LoggerConfig {
 	component: LogComponent;
 	level?: string | undefined;
 	logTranscript?: string | undefined;
+	env?: NodeJS.ProcessEnv | undefined;
 	sessionId?: string | undefined;
 	nowIso?: () => string;
 	consoleTarget?: Pick<Console, "log" | "warn" | "error">;
@@ -32,8 +35,15 @@ export interface Logger {
 	info: (event: string, fields?: Record<string, unknown>) => void;
 	warn: (event: string, fields?: Record<string, unknown>) => void;
 	error: (event: string, fields?: Record<string, unknown>) => void;
-	appendJsonl: (streamName: string, entry: unknown) => Promise<void>;
+	appendJsonl: (streamName: string, entry: unknown, eventMeta?: LoggerEventMeta) => Promise<void>;
 	drain: () => Promise<void>;
+}
+
+export interface LoggerEventMeta {
+	turn?: number;
+	source?: string;
+	category?: string;
+	severity?: LogLevel;
 }
 
 const levelPriority: Record<LogLevel, number> = {
@@ -42,16 +52,17 @@ const levelPriority: Record<LogLevel, number> = {
 	error: 30,
 };
 
-function resolveLogLevel(rawLevel: string | undefined): LogLevel {
+function resolveLogLevel(rawLevel: string | undefined, fallback: LogLevel): LogLevel {
 	const normalized = rawLevel?.trim().toLowerCase();
 	if (normalized === "warn") return "warn";
 	if (normalized === "error") return "error";
-	return "info";
+	if (normalized === "info") return "info";
+	return fallback;
 }
 
-function isFlagEnabled(rawValue: string | undefined): boolean {
+function resolveFlag(rawValue: string | undefined, fallback: boolean): boolean {
 	const normalized = rawValue?.trim().toLowerCase();
-	if (!normalized) return false;
+	if (!normalized) return fallback;
 	return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
 }
 
@@ -106,6 +117,11 @@ function sanitizeStreamName(streamName: string): string | null {
 	return trimmed;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+	return value as Record<string, unknown>;
+}
+
 export function toStructuredSttTurnEntry(
 	entry: SttLogEntry,
 	options: {
@@ -142,8 +158,9 @@ export function toStructuredSttTurnEntry(
 }
 
 export function createLogger(config: LoggerConfig): Logger {
-	const level = resolveLogLevel(config.level ?? process.env.HERZEN_LOG_LEVEL);
-	const transcriptEnabled = isFlagEnabled(config.logTranscript ?? process.env.HERZEN_LOG_TRANSCRIPT);
+	const settings = resolveSettings(config.env ?? process.env).logging;
+	const level = resolveLogLevel(config.level, settings.level);
+	const transcriptEnabled = resolveFlag(config.logTranscript, settings.transcriptEnabled);
 	const nowIso = config.nowIso ?? (() => new Date().toISOString());
 	const consoleTarget = config.consoleTarget ?? console;
 	const pendingWrites = new Set<Promise<void>>();
@@ -154,7 +171,11 @@ export function createLogger(config: LoggerConfig): Logger {
 		emitFallbackWarning(consoleTarget, "Failed to create logs directory.", err);
 	}
 
-	const appendJsonl = async (streamName: string, entry: unknown): Promise<void> => {
+	const appendJsonl = async (
+		streamName: string,
+		entry: unknown,
+		eventMeta: LoggerEventMeta = {},
+	): Promise<void> => {
 		const writeTask = (async () => {
 			try {
 				const stream = sanitizeStreamName(streamName);
@@ -165,6 +186,23 @@ export function createLogger(config: LoggerConfig): Logger {
 
 				const file = join(config.logsDir, `${stream}.jsonl`);
 				await appendFile(file, `${JSON.stringify(entry)}\n`, "utf8");
+
+				// Mirror all non-canonical streams into a canonical envelope stream during migration.
+				if (stream !== "events") {
+					const entryRecord = asRecord(entry);
+					const eventTs = typeof entryRecord?.ts === "string" ? entryRecord.ts : nowIso();
+					const envelope = createObservabilityEventEnvelope({
+						ts: eventTs,
+						sessionId: config.sessionId,
+						turn: eventMeta.turn,
+						source: eventMeta.source ?? config.component,
+						category: eventMeta.category ?? `stream.${stream}`,
+						severity: eventMeta.severity ?? "info",
+						payload: entryRecord ?? { value: entry },
+					});
+					const envelopeFile = join(config.logsDir, "events.jsonl");
+					await appendFile(envelopeFile, `${JSON.stringify(envelope)}\n`, "utf8");
+				}
 			} catch (err) {
 				emitFallbackWarning(consoleTarget, `Failed to append log stream "${streamName}".`, err);
 			}
@@ -191,7 +229,11 @@ export function createLogger(config: LoggerConfig): Logger {
 				message,
 				fields,
 			};
-			void appendJsonl("runtime", entry);
+			void appendJsonl("runtime", entry, {
+				source: config.component,
+				category: event,
+				severity: entryLevel,
+			});
 		} catch (err) {
 			emitFallbackWarning(consoleTarget, "Failed to emit runtime log entry.", err);
 		}

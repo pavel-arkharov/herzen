@@ -1,4 +1,4 @@
-import type { TriggerError, TriggerMode, TriggerSource } from "./trigger/types.js";
+import type { TriggerError, TriggerMode, TriggerSource } from "../trigger/types.js";
 
 export interface RuntimeLogger {
 	log: (...args: unknown[]) => void;

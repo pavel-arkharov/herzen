@@ -40,9 +40,10 @@ At the moment, the system supports:
 - initial local speech-to-text via `@herzen/stt` (whisper.cpp CLI wrapper)
 - per-file audio-to-text transcription via `pnpm transcribe:file` (txt or markdown output)
 - a trigger source boundary with `stdin` mode by default (`Enter` trigger)
-- selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`) plus interactive startup prompt
+- selectable trigger mode via `HERZEN_TRIGGER_MODE` (`stdin`, `wakeword`)
 - wakeword sidecar integration via `@herzen/wakeword` (Unix socket JSONL client for [`herzen-wake`](https://github.com/pavel-arkharov/herzen-wake))
-- adaptive recording mode by default at startup, with optional fixed-mode selector via `HERZEN_ENABLE_FIXED_RECORDING=1`
+- non-interactive default startup for `pnpm dev` with explicit setup flow (`pnpm --filter @herzen/core setup:interactive`)
+- runtime interaction profiles in core (`voice`, `text`, `hybrid`) controlled via env/runtime overrides/live control commands
 - fixed recording via `HERZEN_RECORD_SECONDS` (default `3`)
 - adaptive recording via `@herzen/vad`-backed endpointing (speech start/stop thresholds, silence window, max cap, no-speech timeout)
 - stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override
@@ -52,6 +53,9 @@ At the moment, the system supports:
 - optional conversational follow-up mode after each reply (default off) with bounded window/turns (`HERZEN_FOLLOWUP_ENABLED`, `HERZEN_FOLLOWUP_WINDOW_SECONDS`, `HERZEN_FOLLOWUP_MAX_TURNS`, `HERZEN_FOLLOWUP_STOP_PHRASES`)
   - `HERZEN_FOLLOWUP_WINDOW_SECONDS` is the per-turn silence wait budget in follow-up mode
 - deterministic Home Assistant light on/off handling via `@herzen/integration-homeassistant` with allowlisted entities/aliases
+- operator TUI (`pnpm tui`) with chat composer, actions/perf/settings panels, profile/voice controls, and control ingress (`data/control/ingress.jsonl`)
+- core heartbeat/status contract at `data/control/core_status.json` used by TUI for explicit online/offline state
+- startup runtime settings override merge from `data/control/runtime_settings.json`
 
 Wakeword mode now runs through the external `herzen-wake` daemon and can trigger full turns in `@herzen/core`.
 
@@ -61,7 +65,7 @@ Wakeword mode now runs through the external `herzen-wake` daemon and can trigger
 
 For a non-technical, step-by-step local setup guide, use:
 
-- `/Users/parkharo/Programming/herzen/runbook.md`
+- `runbook.md`
 
 ---
 
@@ -149,6 +153,7 @@ packages/
   wakeword/ # wakeword sidecar client utilities
   dialog/ # local LLM dialog generation boundary
   integration-homeassistant/ # deterministic local Home Assistant light control
+  tui/ # operator terminal UI
 data/ # local-only runtime data (gitignored)
   audio/
   logs/
@@ -156,7 +161,7 @@ data/ # local-only runtime data (gitignored)
 docs/ # architecture, packages, and design notes
 ```
 
-Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`, `packages/vad`, `packages/wakeword`, `packages/dialog`, `packages/integration-homeassistant`.
+Active packages: `packages/core`, `packages/audio`, `packages/stt`, `packages/tts`, `packages/vad`, `packages/wakeword`, `packages/dialog`, `packages/integration-homeassistant`, `packages/tui`.
 
 ---
 
@@ -212,6 +217,67 @@ Example utterances:
 Current limitation:
 
 - one utterance triggers one HA action (command chaining is not implemented yet)
+
+---
+
+## Turn Benchmark Logs
+
+Herzen now writes per-turn latency benchmark entries to:
+
+- `data/logs/turn_benchmark.jsonl`
+
+Each JSONL line includes:
+
+- timestamp checkpoints per turn (`trigger_received`, `recording_started`, `recording_finished`, `stt_started`, `stt_finished`, `ha_intent_started`, `ha_intent_finished`, `llm_started`, `llm_first_token`, `llm_finished`, `tts_started`, `tts_first_audio_sample`, `tts_finished`)
+- computed latencies (`stt_ms`, `ha_intent_ms`, `llm_ms`, `tts_ms`, `end_to_end_ms`, `speak_tail_ms`)
+- split dimensions (`triggerMode`, `actionPath`, `language`)
+
+Related streams still available:
+
+- `data/logs/perf.jsonl` (phase + process samples)
+- `data/logs/runtime.jsonl`
+- `data/logs/stt.jsonl`
+
+Perf logging env vars:
+
+- `HERZEN_LOG_PERF` (default enabled; set `0` to disable perf stream writes)
+- `HERZEN_PERF_SAMPLE_MS` (process sample interval in ms, default `1000`)
+
+Example quick checks:
+
+```bash
+# count collected benchmark turns
+wc -l data/logs/turn_benchmark.jsonl
+
+# inspect latest 5 turns
+tail -n 5 data/logs/turn_benchmark.jsonl
+
+# live conversation + benchmark watch (canonical)
+pnpm conversation:watch
+
+# backward-compatible alias (deprecated)
+pnpm dialog:tail
+
+# start operator TUI (chat/actions/perf/settings)
+pnpm tui
+```
+
+## Run Modes
+
+```bash
+# configure runtime defaults once (interactive)
+pnpm --filter @herzen/core setup:interactive
+
+# daily core runtime (non-interactive)
+pnpm dev
+
+# optional legacy interactive startup prompts
+HERZEN_STARTUP_INTERACTIVE=1 pnpm dev
+```
+
+`conversation:watch` now prints compact per-turn benchmark latency lines by default.
+Use `pnpm conversation:watch -- --no-benchmark` to hide benchmark lines.
+`pnpm dialog:tail` remains available as a compatibility alias with a deprecation warning.
 
 ---
 

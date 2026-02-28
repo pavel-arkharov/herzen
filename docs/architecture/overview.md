@@ -113,11 +113,19 @@ The repository is a **pnpm monorepo**.
 
 For Phase 2 and HA MVP, conversation observability remains implemented in `@herzen/core`.
 
-To keep extraction cheap later, the following rule is now active:
+Core source ownership is now organized by bounded domains:
 
-- keep `core/src/dialog_journal.ts` and `core/src/dialog_tail.ts` dependency-light
-- these modules should depend only on Node stdlib and their own local schema/formatting logic
-- do not import trigger/runtime/audio/STT/TTS orchestration modules into journal/tail modules
+- `core/src/app/` runtime bootstrap and turn orchestration
+- `core/src/conversation/` session journal, session watch, stream readers, context window, follow-up
+- `core/src/observability/` logging, retention, performance journaling, envelope contracts
+- `core/src/control/`, `core/src/context/`, `core/src/intent/`, `core/src/settings/`, `core/src/trigger/`, `core/src/recording/`, `core/src/replay/`
+- `core/src/cli/` command entry adapters only
+
+To keep future extraction cheap, the following guardrail remains active:
+
+- keep `core/src/conversation/journal.ts`, `core/src/conversation/stream.ts`, and `core/src/observability/perf_journal.ts` dependency-light
+- these modules should depend only on Node stdlib plus local helper modules in the same extraction boundary
+- do not import trigger/runtime/audio/STT/TTS orchestration modules into these modules
 - evolve schema/formatting in these modules first, and keep runtime wiring thin around them
 
 This preserves a clean future move into a dedicated package without broad refactoring.

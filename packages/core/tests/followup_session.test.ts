@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runFollowupSession } from "../src/followup_session.js";
+import { runFollowupSession } from "../src/conversation/followup_session.js";
 
 function makeTurn(turn: number, transcript: string | undefined) {
 	return {

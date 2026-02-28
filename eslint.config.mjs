@@ -5,6 +5,6 @@ export default [
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["**/dist/**", "**/node_modules/**", "data/**"]
+    ignores: ["**/dist/**", "**/node_modules/**", "**/coverage/**", "data/**"]
   }
 ];

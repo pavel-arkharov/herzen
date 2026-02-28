@@ -1,5 +1,5 @@
 import type { FollowupConfig } from "./followup_config.js";
-import type { RunSttTurnOptions, TurnOutcome } from "./turn.js";
+import type { RunSttTurnOptions, TurnOutcome } from "../app/turn.js";
 
 const MIN_FOLLOWUP_TURN_WINDOW_MS = 250;
 

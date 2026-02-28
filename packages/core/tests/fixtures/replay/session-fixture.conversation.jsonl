@@ -1,0 +1,4 @@
+{"schemaVersion":"dialog.v1","sessionId":"session-fixture","seq":1,"ts":"2026-02-27T00:00:00.000Z","type":"user_utterance","turn":1,"text":"turn on kitchen","detectedLanguage":"en"}
+{"schemaVersion":"dialog.v1","sessionId":"session-fixture","seq":2,"ts":"2026-02-27T00:00:01.000Z","type":"assistant_utterance","turn":1,"text":"Done."}
+{"schemaVersion":"dialog.v1","sessionId":"session-fixture","seq":3,"ts":"2026-02-27T00:00:02.000Z","type":"user_utterance","turn":2,"text":"what is the weather","detectedLanguage":"en"}
+{"schemaVersion":"dialog.v1","sessionId":"session-fixture","seq":4,"ts":"2026-02-27T00:00:03.000Z","type":"user_utterance","turn":3,"text":"turn off lights","detectedLanguage":"en"}

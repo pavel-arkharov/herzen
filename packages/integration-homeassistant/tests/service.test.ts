@@ -158,4 +158,59 @@ describe("createHomeAssistantService", () => {
 			}),
 		);
 	});
+
+	it("executes typed light command through adapter", async () => {
+		const fetchMock = vi.fn(async () => new Response("[]", { status: 200 }));
+		const service = createHomeAssistantService({
+			env: enabledEnv,
+			fetchImpl: fetchMock,
+		});
+
+		const handled = await service.executeCommand({
+			name: "homeassistant.light.turn_off",
+			args: {
+				entity_id: ["light.kitchen_main", "light.kitchen_accent"],
+			},
+			languageHint: "en",
+		});
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"http://homeassistant.local:8123/api/services/light/turn_off",
+			expect.objectContaining({
+				body: JSON.stringify({
+					entity_id: ["light.kitchen_main", "light.kitchen_accent"],
+				}),
+			}),
+		);
+		expect(handled).toEqual(
+			expect.objectContaining({
+				operation: "light.turn_off",
+				result: expect.objectContaining({
+					ok: true,
+				}),
+			}),
+		);
+	});
+
+	it("returns invalid result for malformed command args", async () => {
+		const service = createHomeAssistantService({
+			env: enabledEnv,
+			fetchImpl: vi.fn(async () => new Response("[]", { status: 200 })),
+		});
+
+		const handled = await service.executeCommand({
+			name: "homeassistant.light.turn_on",
+			args: {
+				entity_id: [],
+			},
+			languageHint: "en",
+		});
+
+		expect(handled.result).toEqual(
+			expect.objectContaining({
+				ok: false,
+				code: "RESPONSE_INVALID",
+			}),
+		);
+	});
 });

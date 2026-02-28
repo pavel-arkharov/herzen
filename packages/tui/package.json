@@ -1,0 +1,20 @@
+{
+  "name": "@herzen/tui",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node ../../scripts/ensure_workspace_builds.mjs @herzen/core && tsx src/index.ts",
+    "lint": "eslint . --format json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node ../../scripts/ensure_workspace_builds.mjs @herzen/core && vitest run tests",
+    "test:watch": "vitest tests",
+    "bench:feeds": "node ../../scripts/ensure_workspace_builds.mjs @herzen/core && pnpm --filter @herzen/tui build && node dist/bench_feeds.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@herzen/core": "workspace:*"
+  }
+}

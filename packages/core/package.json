@@ -3,11 +3,33 @@
 	"version": "0.0.1",
 	"type": "module",
 	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./conversation/stream": {
+			"types": "./src/conversation/stream.ts",
+			"import": "./dist/conversation/stream.js",
+			"default": "./dist/conversation/stream.js"
+		},
+		"./settings/registry": {
+			"types": "./src/settings/registry.ts",
+			"import": "./dist/settings/registry.js",
+			"default": "./dist/settings/registry.js"
+		}
+	},
 	"scripts": {
 		"build": "tsc -p tsconfig.json",
 		"dev": "node ../../scripts/ensure_workspace_builds.mjs @herzen/dialog @herzen/tts @herzen/integration-homeassistant && tsx src/index.ts",
 		"dev:watch": "node ../../scripts/ensure_workspace_builds.mjs @herzen/dialog @herzen/tts @herzen/integration-homeassistant && tsx watch src/index.ts",
 		"dialog:tail": "tsx src/cli/dialog_tail.ts",
+		"conversation:watch": "tsx src/cli/session_watch.ts",
+		"setup:interactive": "tsx src/cli/setup_interactive.ts",
+		"logs:prune": "tsx src/cli/logs_prune.ts",
+		"replay": "tsx src/cli/replay.ts",
 		"start": "node ../../scripts/ensure_workspace_builds.mjs @herzen/dialog @herzen/tts @herzen/integration-homeassistant && node --enable-source-maps dist/index.js",
 		"lint": "eslint . --format json",
 		"typecheck": "tsc -p tsconfig.json --noEmit",

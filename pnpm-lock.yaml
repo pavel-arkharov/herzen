@@ -68,6 +68,12 @@ importers:
 
   packages/tts: {}
 
+  packages/tui:
+    dependencies:
+      '@herzen/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/vad:
     dependencies:
       onnxruntime-node:

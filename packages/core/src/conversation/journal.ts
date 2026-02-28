@@ -14,11 +14,14 @@ export type DialogEventType =
 	| "error"
 	| "session_ended";
 
+type IngressSource = "voice" | "tui" | "automation";
+
 export interface SessionSettingsSnapshot {
 	provider: string;
 	model: string;
 	temperature: number;
 	responseTimeoutMs: number;
+	runtimeProfile?: "voice" | "text" | "hybrid";
 	triggerMode: string;
 	recordingMode: string;
 	sttLanguageMode: string;
@@ -41,6 +44,7 @@ export interface UserUtteranceEvent extends BaseDialogEvent {
 	type: "user_utterance";
 	turn: number;
 	text: string;
+	ingressSource?: IngressSource;
 	detectedLanguage?: string;
 	requestedLanguage?: "auto" | "en" | "ru";
 }
@@ -49,6 +53,7 @@ export interface AssistantUtteranceEvent extends BaseDialogEvent {
 	type: "assistant_utterance";
 	turn: number;
 	text: string;
+	ingressSource?: IngressSource;
 	language?: "en" | "ru";
 	provider?: string;
 	model?: string;
@@ -110,12 +115,14 @@ export interface DialogJournal {
 	recordUserUtterance: (event: {
 		turn: number;
 		text: string;
+		ingressSource?: IngressSource;
 		detectedLanguage?: string;
 		requestedLanguage?: "auto" | "en" | "ru";
 	}) => Promise<void>;
 	recordAssistantUtterance: (event: {
 		turn: number;
 		text: string;
+		ingressSource?: IngressSource;
 		language?: "en" | "ru";
 		provider?: string;
 		model?: string;
@@ -177,6 +184,7 @@ function markdownSessionHeader(sessionId: string, startedAtIso: string, settings
 		`- model: ${settings.model}`,
 		`- temperature: ${settings.temperature}`,
 		`- responseTimeoutMs: ${settings.responseTimeoutMs}`,
+		`- runtimeProfile: ${settings.runtimeProfile ?? "voice"}`,
 		`- triggerMode: ${settings.triggerMode}`,
 		`- recordingMode: ${settings.recordingMode}`,
 		`- sttLanguageMode: ${settings.sttLanguageMode}`,
@@ -298,6 +306,7 @@ export function createDialogJournal(config: CreateDialogJournalConfig): DialogJo
 	const recordUserUtterance = async (event: {
 		turn: number;
 		text: string;
+		ingressSource?: IngressSource;
 		detectedLanguage?: string;
 		requestedLanguage?: "auto" | "en" | "ru";
 	}): Promise<void> => {
@@ -307,6 +316,7 @@ export function createDialogJournal(config: CreateDialogJournalConfig): DialogJo
 	const recordAssistantUtterance = async (event: {
 		turn: number;
 		text: string;
+		ingressSource?: IngressSource;
 		language?: "en" | "ru";
 		provider?: string;
 		model?: string;

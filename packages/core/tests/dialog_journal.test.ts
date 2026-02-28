@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { createDialogJournal } from "../src/dialog_journal.js";
+import { createDialogJournal } from "../src/conversation/journal.js";
 
 async function readJsonl(file: string): Promise<Array<Record<string, unknown>>> {
 	const raw = await readFile(file, "utf8");

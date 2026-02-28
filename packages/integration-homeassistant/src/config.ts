@@ -19,8 +19,20 @@ export interface HomeAssistantConfig {
 	defaultLight?: string;
 }
 
-export function resolveHomeAssistantConfig(env: NodeJS.ProcessEnv = process.env): HomeAssistantConfig {
-	const enabled = resolveBooleanFlag(env.HERZEN_HA_ENABLED, false);
+export interface HomeAssistantConfigOverrides {
+	enabled?: boolean;
+	timeoutMs?: number;
+	allowedLights?: string[];
+	lightAliases?: string;
+	sceneAliases?: string;
+	defaultLight?: string;
+}
+
+export function resolveHomeAssistantConfig(
+	env: NodeJS.ProcessEnv = process.env,
+	overrides: HomeAssistantConfigOverrides = {},
+): HomeAssistantConfig {
+	const enabled = overrides.enabled ?? resolveBooleanFlag(env.HERZEN_HA_ENABLED, false);
 	if (!enabled) {
 		return {
 			enabled: false,
@@ -43,10 +55,16 @@ export function resolveHomeAssistantConfig(env: NodeJS.ProcessEnv = process.env)
 		requireStrictFilePermissions: true,
 	});
 
-	const timeoutMs = resolvePositiveInteger(env.HERZEN_HA_TIMEOUT_MS, DEFAULT_TIMEOUT_MS, "HERZEN_HA_TIMEOUT_MS");
-	const aliasToLightEntityIds = parseLightAliases(env.HERZEN_HA_LIGHT_ALIASES);
-	const aliasToSceneEntityId = parseSceneAliases(env.HERZEN_HA_SCENE_ALIASES);
-	const explicitAllowed = parseEntityList(env.HERZEN_HA_ALLOWED_LIGHTS, "HERZEN_HA_ALLOWED_LIGHTS");
+	const timeoutMs =
+		typeof overrides.timeoutMs === "number" ?
+			resolveExplicitPositiveInteger(overrides.timeoutMs, "timeoutMs")
+		: resolvePositiveInteger(env.HERZEN_HA_TIMEOUT_MS, DEFAULT_TIMEOUT_MS, "HERZEN_HA_TIMEOUT_MS");
+	const lightAliasesRaw = overrides.lightAliases ?? env.HERZEN_HA_LIGHT_ALIASES;
+	const sceneAliasesRaw = overrides.sceneAliases ?? env.HERZEN_HA_SCENE_ALIASES;
+	const aliasToLightEntityIds = parseLightAliases(lightAliasesRaw);
+	const aliasToSceneEntityId = parseSceneAliases(sceneAliasesRaw);
+	const explicitAllowed =
+		overrides.allowedLights ? parseAllowedLightsOverride(overrides.allowedLights) : parseEntityList(env.HERZEN_HA_ALLOWED_LIGHTS, "HERZEN_HA_ALLOWED_LIGHTS");
 
 	let allowedLights = explicitAllowed;
 	if (allowedLights.length === 0) {
@@ -55,7 +73,7 @@ export function resolveHomeAssistantConfig(env: NodeJS.ProcessEnv = process.env)
 		);
 	}
 
-	const defaultLightRaw = env.HERZEN_HA_DEFAULT_LIGHT?.trim().toLowerCase();
+	const defaultLightRaw = overrides.defaultLight?.trim().toLowerCase() ?? env.HERZEN_HA_DEFAULT_LIGHT?.trim().toLowerCase();
 	let defaultLight: string | undefined;
 	if (defaultLightRaw) {
 		assertLightEntityId(defaultLightRaw, "HERZEN_HA_DEFAULT_LIGHT");
@@ -271,6 +289,17 @@ function parseEntityList(rawValue: string | undefined, envName: string): string[
 	return uniqueValues(entities);
 }
 
+function parseAllowedLightsOverride(allowedLights: string[]): string[] {
+	const entities: string[] = [];
+	for (const value of allowedLights) {
+		const entityId = value.trim().toLowerCase();
+		if (!entityId) continue;
+		assertLightEntityId(entityId, "allowedLights");
+		entities.push(entityId);
+	}
+	return uniqueValues(entities);
+}
+
 function parseLightAliases(rawValue: string | undefined): Record<string, string[]> {
 	if (!rawValue?.trim()) return {};
 	const aliases: Record<string, string[]> = {};
@@ -360,4 +389,11 @@ function uniqueValues(values: string[]): string[] {
 		unique.push(value);
 	}
 	return unique;
+}
+
+function resolveExplicitPositiveInteger(value: number, name: string): number {
+	if (!Number.isInteger(value) || value <= 0) {
+		throw new HomeAssistantError("CONFIG_INVALID", `${name} must be a positive integer.`);
+	}
+	return value;
 }

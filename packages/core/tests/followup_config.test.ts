@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
 	isFollowupStopPhrase,
 	normalizeFollowupPhrase,
 	parseStopPhrases,
 	resolveFollowupConfig,
-} from "../src/followup_config.js";
+} from "../src/conversation/followup_config.js";
 
 describe("resolveFollowupConfig", () => {
 	it("uses safe defaults", () => {
@@ -32,15 +32,13 @@ describe("resolveFollowupConfig", () => {
 		});
 	});
 
-	it("falls back on invalid values and emits warnings", () => {
-		const warn = vi.fn();
+	it("falls back on invalid values", () => {
 		const config = resolveFollowupConfig(
 			{
 				HERZEN_FOLLOWUP_ENABLED: "maybe",
 				HERZEN_FOLLOWUP_WINDOW_SECONDS: "-1",
 				HERZEN_FOLLOWUP_MAX_TURNS: "1.7",
 			},
-			{ warn },
 		);
 
 		expect(config).toEqual({
@@ -49,22 +47,16 @@ describe("resolveFollowupConfig", () => {
 			maxTurns: 3,
 			stopPhrases: [],
 		});
-		expect(warn).toHaveBeenCalledTimes(3);
 	});
 
 	it("rejects partially numeric follow-up window values", () => {
-		const warn = vi.fn();
 		const config = resolveFollowupConfig(
 			{
 				HERZEN_FOLLOWUP_WINDOW_SECONDS: "8abc",
 			},
-			{ warn },
 		);
 
 		expect(config.windowSeconds).toBe(8);
-		expect(warn).toHaveBeenCalledWith(
-			'Invalid HERZEN_FOLLOWUP_WINDOW_SECONDS "8abc". Falling back to 8.',
-		);
 	});
 });
 
