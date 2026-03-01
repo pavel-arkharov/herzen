@@ -12,10 +12,30 @@ const DEFAULT_VAD_END_THRESHOLD = 0.35;
 const DEFAULT_VAD_FRAME_SAMPLES = 512;
 
 const FALLBACK_SPEECH = "[en] I couldn't understand that.";
-const RESPONSE_FALLBACK_SPEECH_EN = "[en] I heard you, but I can't respond right now.";
-const RESPONSE_FALLBACK_SPEECH_RU = "[ru] Я вас услышал, но сейчас не могу ответить.";
 const FALLBACK_RESPONSE_ERROR_CODE = "RESPONSE_UNAVAILABLE";
 const MIN_RECORD_SECONDS = 0.2;
+const RESPONSE_FALLBACK_BY_CODE: Record<string, { en: string; ru: string }> = {
+	RUNTIME_UNAVAILABLE: {
+		en: "[en] I can't reach the local model right now. Please check if Ollama is running.",
+		ru: "[ru] Не могу подключиться к локальной модели. Проверьте, что Ollama запущен.",
+	},
+	CONFIG_INVALID: {
+		en: "[en] Response model configuration is invalid. Please check model and provider settings.",
+		ru: "[ru] Некорректная конфигурация модели ответа. Проверьте настройки модели и провайдера.",
+	},
+	GENERATION_FAILED: {
+		en: "[en] The local model failed to generate a reply. Please try again.",
+		ru: "[ru] Локальная модель не смогла сгенерировать ответ. Попробуйте ещё раз.",
+	},
+	OUTPUT_INVALID: {
+		en: "[en] The local model returned an empty reply. Please try again.",
+		ru: "[ru] Локальная модель вернула пустой ответ. Попробуйте ещё раз.",
+	},
+	RESPONSE_UNAVAILABLE: {
+		en: "[en] Response service is unavailable right now.",
+		ru: "[ru] Сервис ответа сейчас недоступен.",
+	},
+};
 
 type RequestedResponseLanguage = "auto" | "en" | "ru";
 type TurnBenchmarkLanguage = "en" | "ru" | "mixed" | "unknown";
@@ -465,7 +485,11 @@ export async function runTextTurn(
 			timeline.llmStartedAtMs = responseStartedAtMs;
 			timeline.llmFinishedAtMs = Date.now();
 			llmErrorCode = resolveResponseErrorCode(err, deps.isResponseError);
-			speechText = responseUnavailableSpeech(transcript, language);
+			speechText = responseUnavailableSpeech({
+				transcript,
+				language,
+				errorCode: llmErrorCode,
+			});
 			speechLanguage = responseUnavailableLanguage(transcript, language);
 			assistantSource = "fallback";
 			if (isResponseError(err, deps.isResponseError)) {
@@ -500,7 +524,11 @@ export async function runTextTurn(
 		timeline.llmStartedAtMs = Date.now();
 		timeline.llmFinishedAtMs = timeline.llmStartedAtMs;
 		llmErrorCode = FALLBACK_RESPONSE_ERROR_CODE;
-		speechText = responseUnavailableSpeech(transcript, language);
+		speechText = responseUnavailableSpeech({
+			transcript,
+			language,
+			errorCode: llmErrorCode,
+		});
 		speechLanguage = responseUnavailableLanguage(transcript, language);
 		assistantSource = "fallback";
 		deps.logger.error("LLM response service unavailable.");
@@ -980,7 +1008,11 @@ export async function runSttTurn(
 				timeline.llmStartedAtMs = responseStartedAtMs;
 				timeline.llmFinishedAtMs = Date.now();
 				llmErrorCode = resolveResponseErrorCode(err, deps.isResponseError);
-				speechText = responseUnavailableSpeech(transcript, language);
+				speechText = responseUnavailableSpeech({
+					transcript,
+					language,
+					errorCode: llmErrorCode,
+				});
 				speechLanguage = responseUnavailableLanguage(transcript, language);
 				assistantSource = "fallback";
 				if (isResponseError(err, deps.isResponseError)) {
@@ -1014,7 +1046,11 @@ export async function runSttTurn(
 			timeline.llmStartedAtMs = Date.now();
 			timeline.llmFinishedAtMs = timeline.llmStartedAtMs;
 			llmErrorCode = FALLBACK_RESPONSE_ERROR_CODE;
-			speechText = responseUnavailableSpeech(transcript, language);
+			speechText = responseUnavailableSpeech({
+				transcript,
+				language,
+				errorCode: llmErrorCode,
+			});
 			speechLanguage = responseUnavailableLanguage(transcript, language);
 			assistantSource = "fallback";
 			deps.logger.error("LLM response service unavailable.");
@@ -1501,9 +1537,24 @@ function responseUnavailableLanguage(transcript: string, language: string): "en"
 	return detectedLanguageLabel(transcript, language);
 }
 
-function responseUnavailableSpeech(transcript: string, language: string): string {
-	if (responseUnavailableLanguage(transcript, language) === "ru") return RESPONSE_FALLBACK_SPEECH_RU;
-	return RESPONSE_FALLBACK_SPEECH_EN;
+function responseUnavailableSpeech(input: {
+	transcript: string;
+	language: string;
+	errorCode?: string;
+}): string {
+	const detectedLanguage = responseUnavailableLanguage(input.transcript, input.language);
+	const mapped = input.errorCode ? RESPONSE_FALLBACK_BY_CODE[input.errorCode] : undefined;
+	if (mapped) {
+		return detectedLanguage === "ru" ? mapped.ru : mapped.en;
+	}
+	if (detectedLanguage === "ru") {
+		return input.errorCode ?
+				`[ru] Я вас услышал, но сейчас не могу ответить (код: ${input.errorCode}).`
+			:	"[ru] Я вас услышал, но сейчас не могу ответить.";
+	}
+	return input.errorCode ?
+			`[en] I heard you, but I can't respond right now (code: ${input.errorCode}).`
+		:	"[en] I heard you, but I can't respond right now.";
 }
 
 function detectedLanguageLabel(transcript: string, language: string): "en" | "ru" {

@@ -14,6 +14,7 @@ export type LogLevel = "info" | "warn" | "error";
 
 export type SettingsKey =
 	| "runtime.profile"
+	| "tui.user_name"
 	| "logging.level"
 	| "logging.transcript_enabled"
 	| "logging.audio_input_enabled"
@@ -35,6 +36,7 @@ export type SettingsKey =
 
 interface SettingValueByKey {
 	"runtime.profile": "voice" | "text" | "hybrid";
+	"tui.user_name": string;
 	"logging.level": LogLevel;
 	"logging.transcript_enabled": boolean;
 	"logging.audio_input_enabled": boolean;
@@ -68,6 +70,9 @@ export interface SettingMeta<K extends SettingsKey = SettingsKey> {
 export interface ResolvedSettings {
 	runtime: {
 		profile: "voice" | "text" | "hybrid";
+	};
+	tui: {
+		userName: string;
 	};
 	logging: {
 		level: LogLevel;
@@ -161,6 +166,11 @@ function parseRuntimeProfile(rawValue: string | undefined): "voice" | "text" | "
 	return "voice";
 }
 
+function parseUserName(rawValue: string | undefined, fallback: string): string {
+	const trimmed = rawValue?.trim();
+	return trimmed ? trimmed : fallback;
+}
+
 const SETTING_DEFINITIONS: { [K in SettingsKey]: SettingMeta<K> } = {
 	"runtime.profile": {
 		key: "runtime.profile",
@@ -168,6 +178,15 @@ const SETTING_DEFINITIONS: { [K in SettingsKey]: SettingMeta<K> } = {
 		defaultValue: "voice",
 		parse: (rawValue) => parseRuntimeProfile(rawValue),
 		scope: "runtime",
+		sensitive: false,
+		mutability: "runtime",
+	},
+	"tui.user_name": {
+		key: "tui.user_name",
+		envName: "USER_NAME",
+		defaultValue: "USER",
+		parse: (rawValue) => parseUserName(rawValue, "USER"),
+		scope: "tui",
 		sensitive: false,
 		mutability: "runtime",
 	},
@@ -352,6 +371,9 @@ export function resolveSettings(env: NodeJS.ProcessEnv = process.env): ResolvedS
 	return {
 		runtime: {
 			profile: resolveValue("runtime.profile", env),
+		},
+		tui: {
+			userName: resolveValue("tui.user_name", env),
 		},
 		logging: {
 			level: resolveValue("logging.level", env),

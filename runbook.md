@@ -7,7 +7,7 @@ Goal: get Herzen running locally with the highest chance of success.
 
 If you only follow one path, use:
 
-- `fixed` recording mode
+- `adaptive` recording mode (default)
 - `Enter` trigger mode
 - local Ollama model enabled
 
@@ -30,6 +30,7 @@ Herzen is a local voice assistant monorepo with these packages:
 - `@herzen/vad`: voice activity detection for adaptive recording
 - `@herzen/wakeword`: wakeword client (sidecar integration)
 - `@herzen/dialog`: local LLM dialog service (Ollama provider)
+- `@herzen/tui`: operator terminal UI for text ingress + runtime controls
 
 ---
 
@@ -154,7 +155,7 @@ For adaptive mode (`@herzen/vad`), also place a Silero VAD model at:
 
 - `data/models/silero_vad.onnx`
 
-If you do not have this yet, you can still run Herzen in `fixed` mode.
+If you do not have this yet, core can still run and may fall back to fixed capture for affected turns.
 
 ---
 
@@ -238,13 +239,21 @@ If `HERZEN_OLLAMA_MODEL` is missing or Ollama is unavailable, Herzen still runs,
 From repo root:
 
 ```bash
+# one-time interactive setup of runtime defaults
+pnpm --filter @herzen/core setup:interactive
+
+# daily runtime startup (non-interactive)
 pnpm dev
 ```
 
-When prompted:
+`setup:interactive` asks for:
 
-1. Choose recording mode: `2` (`Fixed`)
-2. Choose trigger mode: `2` (`Enter`)
+1. recording mode (`Adaptive` by default; `Fixed` appears only when `HERZEN_ENABLE_FIXED_RECORDING=1`)
+2. trigger mode (`Wakeword` or `Enter`)
+3. runtime profile (`Voice`, `Text`, `Hybrid`)
+4. adaptive max length (if adaptive mode is selected)
+
+Then run `pnpm dev` and use the selected profile/trigger defaults.
 
 Then:
 
@@ -273,16 +282,15 @@ pnpm tui
 Adaptive recording mode:
 
 - Requires valid Silero VAD model path
-- Choose recording mode `1` (`Adaptive`) at startup
-- Set adaptive max length when prompted
-- Current limitation: adaptive recording length behavior is not fully correct yet; prefer `fixed` mode for stable use
+- Default mode when `HERZEN_RECORD_MODE` is not set
+- Configure max length via `setup:interactive` or `HERZEN_RECORD_MAX_SECONDS`
 
 Wakeword trigger mode:
 
 - Uses external sidecar repo `herzen-wake`
 - Follow setup/start instructions in the `herzen-wake` repository
 - This runbook intentionally does not duplicate sidecar startup steps
-- After sidecar is running, choose trigger mode `1` (`Wakeword`)
+- After sidecar is running, set `HERZEN_TRIGGER_MODE=wakeword` or choose Wakeword in `setup:interactive`
 
 ---
 
@@ -339,7 +347,7 @@ pnpm --filter @herzen/vad test
 `Adaptive recording error` / VAD model missing
 
 - Verify `data/models/silero_vad.onnx` exists
-- Or use `fixed` mode
+- Or set `HERZEN_RECORD_MODE=fixed` (and `HERZEN_ENABLE_FIXED_RECORDING=1`) if you want fixed-only operation
 
 `LLM response disabled` / Ollama errors
 
@@ -358,7 +366,7 @@ pnpm --filter @herzen/vad test
 
 For day-1 success, start here:
 
-1. Fixed recording mode
+1. Adaptive recording mode (default)
 2. Enter trigger mode
 3. Ollama running with one small local model
-4. Enable adaptive and wakeword only after baseline flow is stable
+4. Enable wakeword only after baseline flow is stable

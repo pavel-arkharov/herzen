@@ -1,7 +1,7 @@
 # Herzen v1 Architecture Spec
 
 Status: Proposed  
-Last updated: 2026-02-27  
+Last updated: 2026-03-01  
 Applies to: `@herzen/core`, `@herzen/dialog`, `@herzen/integration-homeassistant`
 
 ## 1) Goal
@@ -46,7 +46,7 @@ This spec is the next-stage target architecture. It is designed to evolve from t
 ```mermaid
 flowchart TD
   A["Ingress (stdin/wakeword/followup/automation/tui)"] --> B["Gateway"]
-  A2["control/ingress.jsonl (chat.send)"] --> B
+  A2["control/ingress.jsonl (chat.send/runtime.set_profile/voice.trigger_once/wakeword.set_enabled/runtime.get_status)"] --> B
   B --> C["Lane Scheduler"]
   C --> D["Turn Executor"]
   D --> E["Intent Router"]
@@ -70,8 +70,7 @@ Normalizes incoming events into a single internal envelope and assigns:
 1. `sessionId`
 2. `laneKey`
 3. `traceId`
-4. `source` (`stdin`, `wakeword`, `followup`, `automation`)
-5. `source` (`tui`) for control ingress text turns
+4. `source` (`stdin`, `wakeword`, `followup`, `automation`, `tui`)
 
 ### 5.2 Lane Scheduler
 
@@ -199,12 +198,18 @@ export interface ControlIngressEnvelopeV1 {
   ingressId: string;
   sessionId: string;
   source: "tui" | "automation";
-  command: "chat.send";
-  payload: {
-    sessionId: string;
-    text: string;
-    source: "tui";
-  };
+  command:
+    | "chat.send"
+    | "runtime.set_profile"
+    | "voice.trigger_once"
+    | "wakeword.set_enabled"
+    | "runtime.get_status";
+  payload:
+    | { sessionId: string; text: string; source: "tui" | "automation" }
+    | { profile: "voice" | "text" | "hybrid" }
+    | { source?: "tui" | "automation" }
+    | { enabled: boolean }
+    | { includeDiagnostics?: boolean };
   traceId?: string;
   ts: string;
 }

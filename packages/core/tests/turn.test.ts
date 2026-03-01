@@ -432,12 +432,14 @@ describe("createSttTriggerHandler", () => {
 		expect(onAssistantUtterance).toHaveBeenCalledWith(
 			expect.objectContaining({
 				turn: 1,
-				text: "[en] I heard you, but I can't respond right now.",
+				text: "[en] I can't reach the local model right now. Please check if Ollama is running.",
 				ingressSource: "voice",
 				language: "en",
 			}),
 		);
-		expect(speak).toHaveBeenCalledWith("[en] I heard you, but I can't respond right now.");
+		expect(speak).toHaveBeenCalledWith(
+			"[en] I can't reach the local model right now. Please check if Ollama is running.",
+		);
 		expect(appendSttLog).toHaveBeenCalledWith(
 			expect.objectContaining({
 				llmOutcome: "error",
@@ -472,7 +474,9 @@ describe("createSttTriggerHandler", () => {
 		const handleTrigger = createSttTriggerHandler(deps);
 		await handleTrigger();
 
-		expect(speak).toHaveBeenCalledWith("[ru] Я вас услышал, но сейчас не могу ответить.");
+		expect(speak).toHaveBeenCalledWith(
+			"[ru] Не могу подключиться к локальной модели. Проверьте, что Ollama запущен.",
+		);
 	});
 
 	it("uses fallback speech when transcript is empty", async () => {

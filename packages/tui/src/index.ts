@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { stdin as input, stdout as output } from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
+import { resolveSettings } from "@herzen/core/settings/registry";
 import {
 	createFeedReaders,
 	type ActionFeedEntry,
@@ -180,6 +181,10 @@ async function main(): Promise<void> {
 		const coreOnline = coreRuntimeStatus.online;
 		const coreState = coreRuntimeStatus.status?.coreState ?? "offline";
 		const activeProfile = coreRuntimeStatus.status?.profile ?? "-";
+		const resolvedSettings = resolveSettings({
+			...process.env,
+			...runtimeOverrides,
+		});
 		const runtimeState = `core:${coreOnline ? "online" : "offline"}(${coreState})`;
 		const headerSession = coreRuntimeStatus.status?.sessionId || currentSessionId || "-";
 		const ingressItems = [...ingressStates.values()].sort((left, right) => left.updatedAtMs - right.updatedAtMs);
@@ -196,13 +201,37 @@ async function main(): Promise<void> {
 			selectedSettingIndex,
 			settingError,
 			saving,
-			ingressStates: ingressItems,
 			inputMode,
+			userName: resolvedSettings.tui.userName,
 		});
-		const wrappedPanelLines = panelLines.flatMap((line) => wrapAnsi(line, width));
-		const visiblePanelLines = wrappedPanelLines.slice(-mainHeight);
-		while (visiblePanelLines.length < mainHeight) {
-			visiblePanelLines.unshift("");
+		let visiblePanelLines: string[];
+		if (panel === "chat") {
+			const chatHeaderLineCount = coreRuntimeStatus.status ? 3 : 1;
+			const pinnedTopLines = [
+				...renderIngressFrame(ingressItems),
+				"",
+				...panelLines.slice(0, chatHeaderLineCount),
+			].flatMap((line) => wrapAnsi(line, width));
+			const chatBodyLines = panelLines
+				.slice(chatHeaderLineCount)
+				.flatMap((line) => wrapAnsi(line, width));
+
+			if (pinnedTopLines.length >= mainHeight) {
+				visiblePanelLines = pinnedTopLines.slice(0, mainHeight);
+			} else {
+				const chatBodyHeight = mainHeight - pinnedTopLines.length;
+				const visibleBodyLines = chatBodyLines.slice(-chatBodyHeight);
+				while (visibleBodyLines.length < chatBodyHeight) {
+					visibleBodyLines.unshift("");
+				}
+				visiblePanelLines = [...pinnedTopLines, ...visibleBodyLines];
+			}
+		} else {
+			const wrappedPanelLines = panelLines.flatMap((line) => wrapAnsi(line, width));
+			visiblePanelLines = wrappedPanelLines.slice(-mainHeight);
+			while (visiblePanelLines.length < mainHeight) {
+				visiblePanelLines.unshift("");
+			}
 		}
 
 		const footer = `${runtimeState} | ingress_pending=${pendingCount} | ${statusMessage}`;
@@ -462,6 +491,7 @@ async function main(): Promise<void> {
 
 		if (key === "i") {
 			inputMode = "insert";
+			panel = "chat";
 			updateStatus("info", "insert mode");
 			render();
 			return;
@@ -571,11 +601,11 @@ function renderPanel(
 		selectedSettingIndex: number;
 		settingError: string;
 		saving: boolean;
-		ingressStates: IngressState[];
 		inputMode: InputMode;
+		userName: string;
 	},
 ): string[] {
-	if (panel === "chat") return renderChatPanel(state.sessionFeed, state.ingressStates, state.coreStatus);
+	if (panel === "chat") return renderChatPanel(state.sessionFeed, state.coreStatus, state.userName);
 	if (panel === "actions") return renderActionsPanel(state.actionFeed);
 	if (panel === "perf") return renderPerfPanel(state.perfSummary);
 	return renderSettingsPanel(
@@ -587,10 +617,31 @@ function renderPanel(
 	);
 }
 
+function renderIngressFrame(ingressStates: IngressState[]): string[] {
+	const lines: string[] = [];
+	lines.push(`${ANSI_WHITE}Ingress${ANSI_RESET}`);
+	if (ingressStates.length === 0) {
+		lines.push(`${ANSI_DIM}(none)${ANSI_RESET}`);
+		return lines;
+	}
+	for (const ingress of ingressStates.slice(-5)) {
+		const stateColor =
+			ingress.status === "failed" ? ANSI_RED
+			: ingress.status === "processed" ? ANSI_GREEN
+			: ANSI_YELLOW;
+		const detail =
+			ingress.status === "failed" && ingress.errorCode ? ` code=${ingress.errorCode}` : "";
+		lines.push(
+			`${ANSI_DIM}${shortIngressId(ingress.ingressId)}${ANSI_RESET} ${stateColor}${ingress.status}${ANSI_RESET} ${ANSI_DIM}[${ingress.source}]${ANSI_RESET}${detail} ${ingress.textPreview}`,
+		);
+	}
+	return lines;
+}
+
 function renderChatPanel(
 	entries: SessionFeedEntry[],
-	ingressStates: IngressState[],
 	coreStatus: CoreStatusSnapshot | null,
+	userName: string,
 ): string[] {
 	const lines: string[] = [];
 	lines.push(`${ANSI_WHITE}Chat${ANSI_RESET}`);
@@ -616,29 +667,14 @@ function renderChatPanel(
 		}
 		const role =
 			entry.role === "user" ?
-				`${ANSI_CYAN}USER${ANSI_RESET}`
-			: entry.role === "assistant" ? `${ANSI_GREEN}ASSIST${ANSI_RESET}`
+				`${ANSI_CYAN}${userName || "USER"}${ANSI_RESET}`
+			: entry.role === "assistant" ? `${ANSI_GREEN}Herzen${ANSI_RESET}`
 			: `${ANSI_YELLOW}SYSTEM${ANSI_RESET}`;
 		const sourceSuffix = entry.ingressSource ? ` ${ANSI_DIM}[${entry.ingressSource}]${ANSI_RESET}` : "";
 		lines.push(`  ${role}${sourceSuffix} ${entry.text}`);
 	}
 	if (entries.length === 0) {
 		lines.push(`${ANSI_DIM}(no transcript entries yet)${ANSI_RESET}`);
-	}
-
-	if (ingressStates.length > 0) {
-		lines.push("");
-		lines.push(`${ANSI_WHITE}Ingress${ANSI_RESET}`);
-		for (const ingress of ingressStates.slice(-5)) {
-			const stateColor = ingress.status === "failed" ? ANSI_RED : ingress.status === "processed" ? ANSI_GREEN : ANSI_YELLOW;
-			const detail =
-				ingress.status === "failed" && ingress.errorCode ?
-					` code=${ingress.errorCode}`
-				: "";
-			lines.push(
-				`${ANSI_DIM}${shortIngressId(ingress.ingressId)}${ANSI_RESET} ${stateColor}${ingress.status}${ANSI_RESET} ${ANSI_DIM}[${ingress.source}]${ANSI_RESET}${detail} ${ingress.textPreview}`,
-			);
-		}
 	}
 	return lines;
 }

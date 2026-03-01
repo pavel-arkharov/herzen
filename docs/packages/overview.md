@@ -371,25 +371,25 @@ Operator terminal UI with live feeds, runtime setting controls, and text ingress
 
 This package is responsible for:
 
-- rendering live chat/action/perf/status panels from runtime logs
-- emitting `control.ingress.v1` `chat.send` events into `data/control/ingress.jsonl`
-- exposing runtime-safe setting toggles persisted to `data/control/runtime_settings.json`
+- rendering live `Chat`/`Actions`/`Perf`/`Settings` panels from runtime streams
+- writing control ingress commands (`chat.send`, runtime profile/voice/wakeword controls) to `data/control/ingress.jsonl`
+- showing explicit ingress lifecycle (`queued`, `accepted`, `processed`, `failed`) and core online/offline heartbeat state
+- persisting runtime setting overrides to `data/control/runtime_settings.json`
 
 Current panel layout:
 
 - Header
 - Tab strip (`Chat`, `Actions`, `Perf`, `Settings`)
-- Main panel
+- Main panel (`Chat` has pinned `Ingress` + runtime header, with wrapped transcript body)
 - Composer row
 - Footer status line
 
 Current keybindings:
 
-- `1`, `2`, `3`, `s` to switch panels
-- `j`, `k` for settings navigation
-- `Enter` to send composer text (or toggle setting when composer is empty in Settings panel)
-- `Esc` to clear composer
-- `Ctrl+C` to quit
+- Insert mode: `Enter` send, `Esc` normal, `Ctrl+C` quit
+- Normal mode: `i` insert (and jump to `Chat`), `1`/`2`/`3`/`s` panel switch
+- Runtime controls: `v`/`t`/`h` profile, `r` voice-once, `w` wakeword toggle
+- Settings panel: `j`/`k` select, `Enter` apply selected toggle
 
 See package details in:
 - `docs/packages/tui.md`

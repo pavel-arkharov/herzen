@@ -1685,6 +1685,17 @@ async function main(): Promise<void> {
 			reason: string,
 		): Promise<ControlCommandResult> => {
 			if (nextProfile === runtimeProfile) {
+				if (profileSupportsVoice(runtimeProfile)) {
+					const startOutcome = await startVoiceTriggerLoop();
+					if (!startOutcome.ok) return startOutcome;
+				} else {
+					await stopVoiceTriggerLoop();
+					await updateCoreStatus({
+						triggerState: "disabled",
+						wakewordState: "disabled",
+					});
+				}
+				await markReady();
 				return {
 					ok: true,
 					details: {

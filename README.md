@@ -53,9 +53,10 @@ At the moment, the system supports:
 - optional conversational follow-up mode after each reply (default off) with bounded window/turns (`HERZEN_FOLLOWUP_ENABLED`, `HERZEN_FOLLOWUP_WINDOW_SECONDS`, `HERZEN_FOLLOWUP_MAX_TURNS`, `HERZEN_FOLLOWUP_STOP_PHRASES`)
   - `HERZEN_FOLLOWUP_WINDOW_SECONDS` is the per-turn silence wait budget in follow-up mode
 - deterministic Home Assistant light on/off handling via `@herzen/integration-homeassistant` with allowlisted entities/aliases
-- operator TUI (`pnpm tui`) with chat composer, actions/perf/settings panels, profile/voice controls, and control ingress (`data/control/ingress.jsonl`)
+- operator TUI (`pnpm tui`) with `NORMAL`/`INSERT` modes, chat composer, actions/perf/settings panels, profile/voice controls, ingress lifecycle frame, and control ingress (`data/control/ingress.jsonl`)
 - core heartbeat/status contract at `data/control/core_status.json` used by TUI for explicit online/offline state
 - startup runtime settings override merge from `data/control/runtime_settings.json`
+- configurable TUI user role label via `USER_NAME` (settings key `tui.user_name`, default `USER`); assistant label currently shown as `Herzen`
 
 Wakeword mode now runs through the external `herzen-wake` daemon and can trigger full turns in `@herzen/core`.
 
@@ -274,6 +275,18 @@ pnpm dev
 # optional legacy interactive startup prompts
 HERZEN_STARTUP_INTERACTIVE=1 pnpm dev
 ```
+
+`setup:interactive` is a one-time setup helper that writes runtime defaults into
+`data/control/runtime_settings.json` (recording mode, trigger mode, runtime profile,
+and adaptive max duration when adaptive mode is selected).
+
+## TUI Quick Controls
+
+- Start core: `pnpm dev`
+- Start TUI (separate terminal): `pnpm tui`
+- Insert mode: `Enter` send, `Esc` normal
+- Normal mode: `i` insert (auto-jumps to `Chat`), `1`/`2`/`3`/`s` tabs
+- Runtime controls: `v`/`t`/`h` profile, `r` voice-once, `w` wakeword toggle
 
 `conversation:watch` now prints compact per-turn benchmark latency lines by default.
 Use `pnpm conversation:watch -- --no-benchmark` to hide benchmark lines.

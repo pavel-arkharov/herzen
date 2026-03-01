@@ -9,6 +9,7 @@ import {
 } from "@herzen/core/settings/registry";
 
 export const EDITABLE_SETTING_KEYS: SettingsKey[] = [
+	"tui.user_name",
 	"logging.level",
 	"logging.transcript_enabled",
 	"logging.perf_enabled",
@@ -99,6 +100,8 @@ export function setRuntimeSettingOverride(
 
 function resolveSettingValue(settings: ResolvedSettings, key: SettingsKey): unknown {
 	switch (key) {
+		case "tui.user_name":
+			return settings.tui.userName;
 		case "logging.level":
 			return settings.logging.level;
 		case "logging.transcript_enabled":

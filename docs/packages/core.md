@@ -20,9 +20,11 @@ Precedence:
 
 Current classification:
 
-- `runtime` mutable: `runtime.profile`, `logging.*`, `followup.*`, `control.allowed_scopes`, `ha.timeout_ms`
+- `runtime` mutable: `runtime.profile`, `tui.user_name`, `logging.*`, `followup.*`, `control.allowed_scopes`, `ha.timeout_ms`
 - `restart_required`: `ha.enabled`
 - `profile_scoped`: `wakeword.set_enabled` / `voice.trigger_once` control behavior depends on active profile and trigger mode
+
+`tui.user_name` maps to env key `USER_NAME` (default `USER`) and is consumed by TUI chat rendering for the user role label.
 
 ## Runtime Profiles
 

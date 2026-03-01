@@ -13,6 +13,9 @@ describe("settings registry", () => {
 			runtime: {
 				profile: "voice",
 			},
+			tui: {
+				userName: "USER",
+			},
 			logging: {
 				level: "info",
 				transcriptEnabled: false,
@@ -45,6 +48,7 @@ describe("settings registry", () => {
 	it("parses valid values and falls back for invalid values", () => {
 		const settings = resolveSettings({
 			HERZEN_RUNTIME_PROFILE: "hybrid",
+			USER_NAME: "Pavel",
 			HERZEN_LOG_LEVEL: "warn",
 			HERZEN_LOG_TRANSCRIPT: "1",
 			HERZEN_PERF_SAMPLE_MS: "bad",
@@ -60,6 +64,7 @@ describe("settings registry", () => {
 		});
 
 		expect(settings.runtime.profile).toBe("hybrid");
+		expect(settings.tui.userName).toBe("Pavel");
 		expect(settings.logging.level).toBe("warn");
 		expect(settings.logging.transcriptEnabled).toBe(true);
 		expect(settings.logging.perfSampleMs).toBe(1000);

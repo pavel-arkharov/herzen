@@ -26,6 +26,8 @@ Conceptually:
 [ STT → Logic → TTS ]
 ↓
 [ Speakers / Files / Integrations ]
+
+[ Operator TUI ] -> [ control/ingress.jsonl ] -> [ Assistant Core ]
 ```
 
 Only a subset of this pipeline is implemented so far.
@@ -153,11 +155,12 @@ The system must remain usable even if the entire repository is copied to a new m
 
 ## Current packages
 
-Eight packages are currently implemented: **audio**, **core**, **stt**, **tts**, **vad**, **wakeword**, **dialog**, and **integration-homeassistant**.
+Nine packages are currently implemented: **audio**, **core**, **stt**, **tts**, **vad**, **wakeword**, **dialog**, **integration-homeassistant**, and **tui**.
 
 Notes:
 - `@herzen/dialog` currently supports local Ollama-backed MVP replies
 - `@herzen/integration-homeassistant` currently provides deterministic local HA control for allowlisted lights/scenes
+- `@herzen/tui` provides operator controls and text ingress via `control.ingress.v1`
 - advanced response features (tools/memory/streaming) are intentionally deferred
 
 More will be added later without breaking these.

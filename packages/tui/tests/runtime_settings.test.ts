@@ -33,11 +33,13 @@ describe("runtime settings", () => {
 
 	it("resolves editable setting items and updates override map", () => {
 		const items = resolveRuntimeSettingItems({}, {
+			USER_NAME: "Pavel",
 			HERZEN_LOG_LEVEL: "error",
 			HERZEN_LOG_TRANSCRIPT: "true",
 		});
 		expect(items.length).toBeGreaterThanOrEqual(3);
-		expect(items[0]).toMatchObject({ key: "logging.level", value: "error" });
+		expect(items[0]).toMatchObject({ key: "tui.user_name", value: "Pavel" });
+		expect(items.some((item) => item.key === "logging.level" && item.value === "error")).toBe(true);
 
 		const next = setRuntimeSettingOverride({}, "logging.perf_enabled", "false");
 		expect(next).toEqual({
