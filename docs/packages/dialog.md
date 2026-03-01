@@ -24,6 +24,7 @@ Implemented now:
 - Ollama config validation with local-only endpoint guardrails
 - non-streaming Ollama chat generation path (`POST /api/chat`, `stream: false`)
 - context message injection (`conversationContext`) before current user transcript
+- layered system prompts (`kernel` + optional `persona`) before context/user messages
 - timeout/connection error mapping and strict output validation
 
 Not implemented yet:
@@ -42,6 +43,8 @@ Not implemented yet:
 - `HERZEN_RESPONSE_TIMEOUT_MS` (default `12000`)
 - `HERZEN_RESPONSE_TEMPERATURE` (default `0.2`)
 - `HERZEN_ALLOW_REMOTE_LLM` (optional, default disabled)
+- `HERZEN_KERNEL_PROMPT` (optional system-kernel override passed from core)
+- `HERZEN_PERSONA_ENABLED` + `HERZEN_PERSONA_PROMPT` (optional persona layer passed from core)
 
 Local-only policy:
 

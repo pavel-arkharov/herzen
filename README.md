@@ -50,6 +50,8 @@ At the moment, the system supports:
 - local text-to-speech via `@herzen/tts` providers (`say` default, optional local `xtts` sidecar)
 - local LLM-backed reply generation via `@herzen/dialog` (Ollama provider, text-in/text-out)
 - in-session short-term context window for LLM requests (bounded by `HERZEN_CONTEXT_ENABLED`, `HERZEN_CONTEXT_MAX_TURNS`, `HERZEN_CONTEXT_MAX_CHARS`)
+- kernel prompt override for LLM behavior via `HERZEN_KERNEL_PROMPT` (legacy compatibility: `HERZEN_CONTEXT_KERNEL_PROMPT`)
+- optional persona prompt layering for LLM replies (`HERZEN_PERSONA_ENABLED`, `HERZEN_PERSONA_PROMPT`)
 - optional conversational follow-up mode after each reply (default off) with bounded window/turns (`HERZEN_FOLLOWUP_ENABLED`, `HERZEN_FOLLOWUP_WINDOW_SECONDS`, `HERZEN_FOLLOWUP_MAX_TURNS`, `HERZEN_FOLLOWUP_STOP_PHRASES`)
   - `HERZEN_FOLLOWUP_WINDOW_SECONDS` is the per-turn silence wait budget in follow-up mode
 - deterministic Home Assistant light on/off handling via `@herzen/integration-homeassistant` with allowlisted entities/aliases
@@ -110,6 +112,10 @@ LLM response dependency:
 - local Ollama runtime (`ollama serve`) for `@herzen/dialog`
 - model selection via `HERZEN_OLLAMA_MODEL` (required)
 - optional endpoint override via `HERZEN_OLLAMA_BASE_URL` (loopback-only by default)
+- optional kernel/persona controls:
+  - `HERZEN_KERNEL_PROMPT` (or legacy `HERZEN_CONTEXT_KERNEL_PROMPT`)
+  - `HERZEN_PERSONA_ENABLED=1`
+  - `HERZEN_PERSONA_PROMPT`
 
 Home Assistant integration dependency:
 

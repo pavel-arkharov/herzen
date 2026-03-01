@@ -26,6 +26,21 @@ Current classification:
 
 `tui.user_name` maps to env key `USER_NAME` (default `USER`) and is consumed by TUI chat rendering for the user role label.
 
+## Prompt Layering
+
+For LLM conversational responses, core now passes layered prompt inputs into `@herzen/dialog`:
+
+1. `kernelPrompt` (always set; default or override)
+2. `personaPrompt` (optional; only when persona is enabled)
+3. bounded conversation context (recent turns + summary slices)
+
+Environment controls:
+
+- `HERZEN_KERNEL_PROMPT` (preferred)
+- `HERZEN_CONTEXT_KERNEL_PROMPT` (legacy compatibility)
+- `HERZEN_PERSONA_ENABLED` (`0/1`, default disabled)
+- `HERZEN_PERSONA_PROMPT` (used when persona is enabled)
+
 ## Runtime Profiles
 
 Core supports three runtime profiles:

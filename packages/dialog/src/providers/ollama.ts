@@ -35,7 +35,7 @@ export function createOllamaResponseService(
 					timeoutMs: config.timeoutMs,
 					temperature: config.temperature,
 					transcript,
-					systemPrompt: buildMvpSystemPrompt(input),
+					systemPrompts: buildSystemPromptLayers(input),
 					conversationContext: input.conversationContext,
 				});
 			} catch (err) {
@@ -71,9 +71,32 @@ export function createOllamaResponseService(
 	};
 }
 
+export function buildSystemPromptLayers(input: ResponseInput): string[] {
+	const customKernel = normalizeWhitespace(input.kernelPrompt ?? "");
+	const persona = normalizeWhitespace(input.personaPrompt ?? "");
+
+	const prompts: string[] = [];
+	if (customKernel) {
+		prompts.push(customKernel);
+	} else {
+		prompts.push(buildMvpSystemPrompt(input));
+	}
+
+	if (persona) prompts.push(persona);
+
+	// Keep explicit language steering when custom kernel overrides the default prompt.
+	if (customKernel) {
+		const language = resolveResponseLanguage(input.requestedLanguage, input.detectedLanguage);
+		prompts.push(buildLanguageInstruction(language));
+	}
+
+	return prompts;
+}
+
 export function buildMvpSystemPrompt(input: ResponseInput): string {
-	const language = resolveResponseLanguage(input.requestedLanguage, input.detectedLanguage);
-	const languageInstruction = language === "ru" ? "Respond in Russian." : "Respond in English.";
+	const languageInstruction = buildLanguageInstruction(
+		resolveResponseLanguage(input.requestedLanguage, input.detectedLanguage),
+	);
 	return [
 		"You are Herzen, a calm local voice assistant.",
 		"Reply briefly, clearly, and practically.",
@@ -98,7 +121,7 @@ interface RequestOllamaChatOptions {
 	model: string;
 	timeoutMs: number;
 	temperature: number;
-	systemPrompt: string;
+	systemPrompts: string[];
 	transcript: string;
 	conversationContext?: ConversationContextItem[];
 }
@@ -142,10 +165,7 @@ async function requestOllamaChat(options: RequestOllamaChatOptions): Promise<Res
 			temperature: options.temperature,
 		},
 		messages: [
-			{
-				role: "system",
-				content: options.systemPrompt,
-			},
+			...toSystemMessages(options.systemPrompts),
 			...toContextMessages(options.conversationContext),
 			{
 				role: "user",
@@ -172,6 +192,21 @@ async function requestOllamaChat(options: RequestOllamaChatOptions): Promise<Res
 	} finally {
 		clearTimeout(timer);
 	}
+}
+
+function toSystemMessages(
+	systemPrompts: string[],
+): Array<{ role: "system"; content: string }> {
+	const messages: Array<{ role: "system"; content: string }> = [];
+	for (const prompt of systemPrompts) {
+		const content = prompt.trim();
+		if (!content) continue;
+		messages.push({
+			role: "system",
+			content,
+		});
+	}
+	return messages;
 }
 
 function toContextMessages(
@@ -258,6 +293,10 @@ function extractMessageContent(payload: unknown): string {
 	}
 
 	return message.content;
+}
+
+function buildLanguageInstruction(language: ResponseLanguage): string {
+	return language === "ru" ? "Respond in Russian." : "Respond in English.";
 }
 
 function normalizeWhitespace(value: string): string {

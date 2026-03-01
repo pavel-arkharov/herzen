@@ -9,6 +9,11 @@ export HERZEN_PLAYBACK="0"
 # export HERZEN_TRIGGER_MODE="wakeword"
 # export HERZEN_WAKEWORD_SOCKET="$(cd "$HERZEN_ROOT/.." && pwd)/herzen-wake/run/wakeword.sock"
 
+# LLM kernel/persona prompt layering (optional)
+# export HERZEN_KERNEL_PROMPT="You are Herzen, a local assistant. Be concise, safe, and practical."
+# export HERZEN_PERSONA_ENABLED="1"
+# export HERZEN_PERSONA_PROMPT="Address me as sir. Be polite and self-critical. Do not end with a question unless clarification is required."
+
 # Home Assistant integration (optional, recommended: file-based secrets)
 # export HERZEN_HA_ENABLED="1"
 # export HERZEN_HA_SECRETS_DIR="$HERZEN_ROOT/data/secrets/home_assistant"

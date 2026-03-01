@@ -15,6 +15,8 @@ export interface ResponseInput {
 	requestedLanguage?: RequestedResponseLanguage;
 	timestampIso: string;
 	conversationContext?: ConversationContextItem[];
+	kernelPrompt?: string;
+	personaPrompt?: string;
 }
 
 export interface ResponseOutput {

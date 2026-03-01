@@ -802,7 +802,11 @@ function createHandleTrigger(
 					const llmStartedAtMs = Date.now();
 					let response: Awaited<ReturnType<NonNullable<typeof responseService>["generateReply"]>>;
 					try {
-						response = await responseService.generateReply(input);
+						response = await responseService.generateReply({
+							...input,
+							kernelPrompt: resolveContextKernelPrompt(getRuntimeEnv()),
+							personaPrompt: resolvePersonaPrompt(getRuntimeEnv()),
+						});
 					} catch (err) {
 						await emitResponseFailed("respond", {
 							code: isResponseError(err) ? err.code : "RESPONSE_UNAVAILABLE",
@@ -1223,9 +1227,22 @@ function resolveCommandFailureSpeech(input: {
 }
 
 function resolveContextKernelPrompt(env: NodeJS.ProcessEnv): string {
+	const explicitKernel = env.HERZEN_KERNEL_PROMPT?.trim();
+	if (explicitKernel) return explicitKernel;
 	const override = env.HERZEN_CONTEXT_KERNEL_PROMPT?.trim();
 	if (override) return override;
-	return "You are Herzen, a local voice assistant. Be concise, safe, and practical.";
+	return [
+		"You are Herzen, a calm local voice assistant.",
+		"Reply briefly, clearly, and practically.",
+		"If unclear, ask one short clarification question.",
+		"Do not claim that actions in external systems were completed.",
+	].join(" ");
+}
+
+function resolvePersonaPrompt(env: NodeJS.ProcessEnv): string | undefined {
+	if (!isTruthy(env.HERZEN_PERSONA_ENABLED)) return undefined;
+	const prompt = env.HERZEN_PERSONA_PROMPT?.trim();
+	return prompt ? prompt : undefined;
 }
 
 function normalizeContextLanguage(rawLanguage: string | undefined): "en" | "ru" | undefined {

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createResponseService } from "../src/service.js";
-import { buildMvpSystemPrompt, resolveResponseLanguage } from "../src/providers/ollama.js";
+import {
+	buildMvpSystemPrompt,
+	buildSystemPromptLayers,
+	resolveResponseLanguage,
+} from "../src/providers/ollama.js";
 import { ResponseError } from "../src/types.js";
 
 const BASE_ENV = {
@@ -126,6 +130,44 @@ describe("createResponseService", () => {
 		]);
 	});
 
+	it("injects kernel + persona system layers before context and user message", async () => {
+		const fetchMock = vi.fn(async () => {
+			return new Response(
+				JSON.stringify({
+					message: {
+						role: "assistant",
+						content: "Understood.",
+					},
+				}),
+				{ status: 200 },
+			);
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const service = createResponseService({ env: BASE_ENV });
+		await service.generateReply({
+			transcript: "Summarize my day.",
+			detectedLanguage: "en",
+			timestampIso: "2026-03-01T12:00:00.000Z",
+			kernelPrompt: "You are an honest local assistant.",
+			personaPrompt: "Address the user as sir and be polite.",
+			conversationContext: [{ role: "user", text: "I had a gym workout.", turn: 1 }],
+		});
+
+		const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		const body = JSON.parse(String(init.body)) as {
+			messages: Array<{ role: string; content: string }>;
+		};
+
+		expect(body.messages).toEqual([
+			{ role: "system", content: "You are an honest local assistant." },
+			{ role: "system", content: "Address the user as sir and be polite." },
+			{ role: "system", content: "Respond in English." },
+			{ role: "user", content: "I had a gym workout." },
+			{ role: "user", content: "Summarize my day." },
+		]);
+	});
+
 	it("maps timeout/abort failures to RUNTIME_UNAVAILABLE", async () => {
 		const abortErr = Object.assign(new Error("aborted"), { name: "AbortError" });
 		vi.stubGlobal(
@@ -222,6 +264,18 @@ describe("buildMvpSystemPrompt", () => {
 		});
 
 		expect(prompt).toContain("Respond in Russian.");
+	});
+});
+
+describe("buildSystemPromptLayers", () => {
+	it("falls back to the default single system prompt without custom kernel/persona", () => {
+		const prompts = buildSystemPromptLayers({
+			transcript: "Hello",
+			requestedLanguage: "en",
+			timestampIso: "2026-03-01T12:00:00.000Z",
+		});
+		expect(prompts).toHaveLength(1);
+		expect(prompts[0]).toContain("You are Herzen, a calm local voice assistant.");
 	});
 });
 
