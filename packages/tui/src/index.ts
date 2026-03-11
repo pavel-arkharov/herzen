@@ -173,12 +173,19 @@ async function main(): Promise<void> {
 		}
 	};
 
-	const render = (): void => {
-		const width = Math.max(60, output.columns ?? 100);
-		const rows = Math.max(20, output.rows ?? 32);
-		const mainHeight = Math.max(8, rows - 8);
-		const model = process.env.HERZEN_OLLAMA_MODEL?.trim() || "unconfigured";
-		const coreOnline = coreRuntimeStatus.online;
+		const render = (): void => {
+			const width = Math.max(60, output.columns ?? 100);
+			const rows = Math.max(20, output.rows ?? 32);
+			const mainHeight = Math.max(8, rows - 8);
+			const responseProvider =
+				process.env.HERZEN_RESPONSE_PROVIDER?.trim().toLowerCase() || "ollama";
+			const model =
+				responseProvider === "llama-server" ?
+					process.env.HERZEN_LLAMA_SERVER_MODEL?.trim() ||
+					process.env.HERZEN_RESPONSE_MODEL?.trim() ||
+					"unconfigured"
+				:	(process.env.HERZEN_OLLAMA_MODEL?.trim() || "unconfigured");
+			const coreOnline = coreRuntimeStatus.online;
 		const coreState = coreRuntimeStatus.status?.coreState ?? "offline";
 		const activeProfile = coreRuntimeStatus.status?.profile ?? "-";
 		const resolvedSettings = resolveSettings({

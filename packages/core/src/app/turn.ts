@@ -16,8 +16,8 @@ const FALLBACK_RESPONSE_ERROR_CODE = "RESPONSE_UNAVAILABLE";
 const MIN_RECORD_SECONDS = 0.2;
 const RESPONSE_FALLBACK_BY_CODE: Record<string, { en: string; ru: string }> = {
 	RUNTIME_UNAVAILABLE: {
-		en: "[en] I can't reach the local model right now. Please check if Ollama is running.",
-		ru: "[ru] Не могу подключиться к локальной модели. Проверьте, что Ollama запущен.",
+		en: "[en] I can't reach the local model runtime right now. Please check if it is running.",
+		ru: "[ru] Не могу подключиться к локальному рантайму модели. Проверьте, что он запущен.",
 	},
 	CONFIG_INVALID: {
 		en: "[en] Response model configuration is invalid. Please check model and provider settings.",

@@ -1475,9 +1475,10 @@ function resolveSessionSettings(
 	recordingMode: RecordingMode,
 	env: NodeJS.ProcessEnv,
 ): SessionSettingsSnapshot {
+	const responseProvider = resolveResponseProviderForDisplay(env);
 	return {
-		provider: env.HERZEN_RESPONSE_PROVIDER?.trim() || "ollama",
-		model: env.HERZEN_OLLAMA_MODEL?.trim() || "unconfigured",
+		provider: responseProvider,
+		model: resolveResponseModelForDisplay(env, responseProvider),
 		temperature: resolveNumber(
 			env.HERZEN_RESPONSE_TEMPERATURE,
 			DEFAULT_RESPONSE_TEMPERATURE,
@@ -1504,10 +1505,8 @@ function printStartupSummary(input: {
 	haEnabled: boolean;
 	dataRootPath: string;
 }): void {
-	const responseProvider =
-		input.runtimeEnv.HERZEN_RESPONSE_PROVIDER?.trim() || "ollama";
-	const responseModel =
-		input.runtimeEnv.HERZEN_OLLAMA_MODEL?.trim() || "unconfigured";
+	const responseProvider = resolveResponseProviderForDisplay(input.runtimeEnv);
+	const responseModel = resolveResponseModelForDisplay(input.runtimeEnv, responseProvider);
 	const languageMode = input.runtimeEnv.HERZEN_STT_LANGUAGE?.trim() || "auto";
 	process.stdout.write("Herzen Core\n");
 	process.stdout.write(
@@ -1526,6 +1525,20 @@ function printStartupSummary(input: {
 	process.stdout.write(
 		`READY session=${shortSessionId(input.sessionId)} profile=${input.profile}\n`,
 	);
+}
+
+function resolveResponseProviderForDisplay(env: NodeJS.ProcessEnv): string {
+	const value = env.HERZEN_RESPONSE_PROVIDER?.trim();
+	return value && value.length > 0 ? value : "ollama";
+}
+
+function resolveResponseModelForDisplay(env: NodeJS.ProcessEnv, provider: string): string {
+	if (provider.toLowerCase() === "llama-server") {
+		const model = env.HERZEN_LLAMA_SERVER_MODEL?.trim() || env.HERZEN_RESPONSE_MODEL?.trim();
+		return model && model.length > 0 ? model : "unconfigured";
+	}
+	const model = env.HERZEN_OLLAMA_MODEL?.trim();
+	return model && model.length > 0 ? model : "unconfigured";
 }
 
 function controlCommandPolicyScope(command: ControlIngressCommand): string {

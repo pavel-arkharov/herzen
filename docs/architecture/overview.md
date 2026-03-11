@@ -86,7 +86,7 @@ When triggered, the core currently:
 - routes deterministic Home Assistant intents via `@herzen/integration-homeassistant` when enabled
   - supported now: `light.turn_on`, `light.turn_off`, `scene.turn_on`
   - if no HA intent matches, falls through to LLM generation
-- generates local LLM replies via `@herzen/dialog` (Ollama provider)
+- generates local LLM replies via `@herzen/dialog` (`ollama` or `llama-server` provider)
 - appends one structured STT event per trigger to `data/logs/stt.jsonl`
 - optionally plays the recorded file when `HERZEN_PLAYBACK=1`
 - speaks model-generated reply text when available, else a short fallback

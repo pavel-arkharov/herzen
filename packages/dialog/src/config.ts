@@ -1,6 +1,7 @@
 import { ResponseError, type ResponseProvider } from "./types.js";
 
 const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434";
+const DEFAULT_LLAMA_SERVER_BASE_URL = "http://127.0.0.1:8080";
 const DEFAULT_RESPONSE_TIMEOUT_MS = 12_000;
 const DEFAULT_RESPONSE_TEMPERATURE = 0.2;
 
@@ -14,14 +15,22 @@ export interface OllamaConfig {
 	temperature: number;
 }
 
+export interface LlamaServerConfig {
+	baseUrl: string;
+	model: string;
+	timeoutMs: number;
+	temperature: number;
+}
+
 export function resolveResponseProvider(rawProvider = process.env.HERZEN_RESPONSE_PROVIDER): ResponseProvider {
 	const normalized = rawProvider?.trim().toLowerCase();
 	if (!normalized) return "ollama";
 	if (normalized === "ollama") return normalized;
+	if (normalized === "llama-server" || normalized === "llama_server") return "llama-server";
 
 	throw new ResponseError(
 		"CONFIG_INVALID",
-		`Unsupported HERZEN_RESPONSE_PROVIDER "${rawProvider}". Supported values: ollama.`,
+		`Unsupported HERZEN_RESPONSE_PROVIDER "${rawProvider}". Supported values: ollama, llama-server.`,
 	);
 }
 
@@ -34,16 +43,49 @@ export function resolveOllamaConfig(env: NodeJS.ProcessEnv = process.env): Ollam
 		);
 	}
 
-	const baseUrlRaw = env.HERZEN_OLLAMA_BASE_URL?.trim() || DEFAULT_OLLAMA_BASE_URL;
-	const baseUrl = normalizeBaseUrl(baseUrlRaw);
-	const allowRemote = parseBooleanFlag(env.HERZEN_ALLOW_REMOTE_LLM);
-	if (!allowRemote && !isLoopbackUrl(baseUrl)) {
-		throw new ResponseError(
-			"CONFIG_INVALID",
-			`HERZEN_OLLAMA_BASE_URL must use loopback host by default (received "${baseUrl}"). Set HERZEN_ALLOW_REMOTE_LLM=1 to override.`,
-		);
-	}
+	const baseUrl = resolveRuntimeBaseUrl({
+		rawBaseUrl: env.HERZEN_OLLAMA_BASE_URL,
+		defaultBaseUrl: DEFAULT_OLLAMA_BASE_URL,
+		baseUrlEnvName: "HERZEN_OLLAMA_BASE_URL",
+		allowRemoteFlag: env.HERZEN_ALLOW_REMOTE_LLM,
+	});
+	const { timeoutMs, temperature } = resolveSharedResponseParams(env);
 
+	return {
+		baseUrl,
+		model,
+		timeoutMs,
+		temperature,
+	};
+}
+
+export function resolveLlamaServerConfig(
+	env: NodeJS.ProcessEnv = process.env,
+): LlamaServerConfig {
+	const baseUrl = resolveRuntimeBaseUrl({
+		rawBaseUrl: env.HERZEN_LLAMA_SERVER_BASE_URL,
+		defaultBaseUrl: DEFAULT_LLAMA_SERVER_BASE_URL,
+		baseUrlEnvName: "HERZEN_LLAMA_SERVER_BASE_URL",
+		allowRemoteFlag: env.HERZEN_ALLOW_REMOTE_LLM,
+	});
+	const model =
+		env.HERZEN_LLAMA_SERVER_MODEL?.trim() ||
+		env.HERZEN_RESPONSE_MODEL?.trim() ||
+		"llama-server";
+	const { timeoutMs, temperature } = resolveSharedResponseParams(env);
+
+	return {
+		baseUrl,
+		model,
+		timeoutMs,
+		temperature,
+	};
+}
+
+function resolveSharedResponseParams(env: NodeJS.ProcessEnv): {
+	timeoutMs: number;
+	temperature: number;
+} {
 	const timeoutMs = resolvePositiveInteger(
 		env.HERZEN_RESPONSE_TIMEOUT_MS,
 		DEFAULT_RESPONSE_TIMEOUT_MS,
@@ -58,22 +100,35 @@ export function resolveOllamaConfig(env: NodeJS.ProcessEnv = process.env): Ollam
 		2,
 	);
 
-	return {
-		baseUrl,
-		model,
-		timeoutMs,
-		temperature,
-	};
+	return { timeoutMs, temperature };
 }
 
-function normalizeBaseUrl(rawBaseUrl: string): string {
+function resolveRuntimeBaseUrl(input: {
+	rawBaseUrl: string | undefined;
+	defaultBaseUrl: string;
+	baseUrlEnvName: string;
+	allowRemoteFlag: string | undefined;
+}): string {
+	const baseUrlRaw = input.rawBaseUrl?.trim() || input.defaultBaseUrl;
+	const baseUrl = normalizeBaseUrl(baseUrlRaw, input.baseUrlEnvName);
+	const allowRemote = parseBooleanFlag(input.allowRemoteFlag);
+	if (!allowRemote && !isLoopbackUrl(baseUrl)) {
+		throw new ResponseError(
+			"CONFIG_INVALID",
+			`${input.baseUrlEnvName} must use loopback host by default (received "${baseUrl}"). Set HERZEN_ALLOW_REMOTE_LLM=1 to override.`,
+		);
+	}
+	return baseUrl;
+}
+
+function normalizeBaseUrl(rawBaseUrl: string, envName: string): string {
 	let parsed: URL;
 	try {
 		parsed = new URL(rawBaseUrl);
 	} catch (err) {
 		throw new ResponseError(
 			"CONFIG_INVALID",
-			`Invalid HERZEN_OLLAMA_BASE_URL "${rawBaseUrl}". Expected valid http(s) URL.`,
+			`Invalid ${envName} "${rawBaseUrl}". Expected valid http(s) URL.`,
 			{ cause: err },
 		);
 	}
@@ -81,7 +136,7 @@ function normalizeBaseUrl(rawBaseUrl: string): string {
 	if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
 		throw new ResponseError(
 			"CONFIG_INVALID",
-			`Invalid HERZEN_OLLAMA_BASE_URL protocol "${parsed.protocol}". Expected http or https.`,
+			`Invalid ${envName} protocol "${parsed.protocol}". Expected http or https.`,
 		);
 	}
 

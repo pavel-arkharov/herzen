@@ -10,6 +10,10 @@ import { ResponseError } from "../src/types.js";
 const BASE_ENV = {
 	HERZEN_OLLAMA_MODEL: "qwen2.5:3b",
 };
+const LLAMA_ENV = {
+	HERZEN_RESPONSE_PROVIDER: "llama-server",
+	HERZEN_LLAMA_SERVER_MODEL: "Qwen3.5-9B-Uncensored-HauhauCS-Aggressive:Q4_K_M",
+};
 
 afterEach(() => {
 	vi.restoreAllMocks();
@@ -35,6 +39,12 @@ describe("createResponseService", () => {
 		).rejects.toMatchObject<ResponseError>({
 			code: "OUTPUT_INVALID",
 		});
+	});
+
+	it("creates a llama-server service when configured", () => {
+		const service = createResponseService({ env: LLAMA_ENV });
+		expect(service).toBeDefined();
+		expect(typeof service.generateReply).toBe("function");
 	});
 
 	it("returns model reply when ollama succeeds", async () => {
@@ -256,6 +266,96 @@ describe("createResponseService", () => {
 		).rejects.toMatchObject<ResponseError>({
 			code: "OUTPUT_INVALID",
 		});
+	});
+
+	it("returns model reply when llama-server succeeds", async () => {
+		const fetchMock = vi.fn(async () => {
+			return new Response(
+				JSON.stringify({
+					choices: [
+						{
+							message: {
+								role: "assistant",
+								content: "  Sure.   Done. ",
+							},
+						},
+					],
+				}),
+				{ status: 200 },
+			);
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const service = createResponseService({ env: LLAMA_ENV });
+		const output = await service.generateReply({
+			transcript: "Toggle the lamp.",
+			detectedLanguage: "en",
+			timestampIso: "2026-03-11T12:00:00.000Z",
+		});
+
+		expect(output).toMatchObject({
+			text: "Sure. Done.",
+			language: "en",
+			provider: "llama-server",
+			model: "Qwen3.5-9B-Uncensored-HauhauCS-Aggressive:Q4_K_M",
+		});
+		expect(output.durationMs).toBeGreaterThanOrEqual(0);
+
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		expect(url).toBe("http://127.0.0.1:8080/v1/chat/completions");
+		expect(init.method).toBe("POST");
+		const body = JSON.parse(String(init.body)) as {
+			model: string;
+			stream: boolean;
+			temperature: number;
+			messages: Array<{ role: string; content: string }>;
+		};
+		expect(body.model).toBe("Qwen3.5-9B-Uncensored-HauhauCS-Aggressive:Q4_K_M");
+		expect(body.stream).toBe(false);
+		expect(body.temperature).toBe(0.2);
+		expect(body.messages[0]?.role).toBe("system");
+		expect(body.messages[1]?.role).toBe("user");
+		expect(body.messages[1]?.content).toBe("Toggle the lamp.");
+	});
+
+	it("sends a single merged system message for llama-server templates", async () => {
+		const fetchMock = vi.fn(async () => {
+			return new Response(
+				JSON.stringify({
+					choices: [
+						{
+							message: {
+								role: "assistant",
+								content: "Acknowledged.",
+							},
+						},
+					],
+				}),
+				{ status: 200 },
+			);
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const service = createResponseService({ env: LLAMA_ENV });
+		await service.generateReply({
+			transcript: "Summarize my day.",
+			detectedLanguage: "en",
+			timestampIso: "2026-03-11T12:00:00.000Z",
+			kernelPrompt: "You are an honest local assistant.",
+			personaPrompt: "Address the user as sir and be polite.",
+			conversationContext: [{ role: "user", text: "I had a gym workout.", turn: 1 }],
+		});
+
+		const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		const body = JSON.parse(String(init.body)) as {
+			messages: Array<{ role: string; content: string }>;
+		};
+		const systemMessages = body.messages.filter((message) => message.role === "system");
+		expect(systemMessages).toHaveLength(1);
+		expect(systemMessages[0]?.content).toContain("You are an honest local assistant.");
+		expect(systemMessages[0]?.content).toContain("Persona acting mode is enabled.");
+		expect(systemMessages[0]?.content).toContain("Respond in English.");
 	});
 });
 

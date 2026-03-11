@@ -1,4 +1,5 @@
 import { resolveResponseProvider } from "./config.js";
+import { createLlamaServerResponseService } from "./providers/llama_server.js";
 import { createOllamaResponseService } from "./providers/ollama.js";
 import { type ResponseProvider, type ResponseService } from "./types.js";
 
@@ -13,6 +14,9 @@ export function createResponseService(options: CreateResponseServiceOptions = {}
 
 	if (provider === "ollama") {
 		return createOllamaResponseService({ env });
+	}
+	if (provider === "llama-server") {
+		return createLlamaServerResponseService({ env });
 	}
 
 	/* c8 ignore next */

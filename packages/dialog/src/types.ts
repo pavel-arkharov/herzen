@@ -1,4 +1,4 @@
-export type ResponseProvider = "ollama";
+export type ResponseProvider = "ollama" | "llama-server";
 export type ResponseLanguage = "en" | "ru";
 export type RequestedResponseLanguage = "auto" | ResponseLanguage;
 

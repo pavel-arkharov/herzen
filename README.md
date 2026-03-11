@@ -48,7 +48,7 @@ At the moment, the system supports:
 - adaptive recording via `@herzen/vad`-backed endpointing (speech start/stop thresholds, silence window, max cap, no-speech timeout)
 - stable repo-local data pathing by default with optional `HERZEN_DATA_DIR` override
 - local text-to-speech via `@herzen/tts` providers (`say` default, optional local `xtts` sidecar)
-- local LLM-backed reply generation via `@herzen/dialog` (Ollama provider, text-in/text-out)
+- local LLM-backed reply generation via `@herzen/dialog` (`ollama` or `llama-server` provider, text-in/text-out)
 - in-session short-term context window for LLM requests (bounded by `HERZEN_CONTEXT_ENABLED`, `HERZEN_CONTEXT_MAX_TURNS`, `HERZEN_CONTEXT_MAX_CHARS`)
 - kernel prompt override for LLM behavior via `HERZEN_KERNEL_PROMPT` (legacy compatibility: `HERZEN_CONTEXT_KERNEL_PROMPT`)
 - optional persona prompt layering for LLM replies (`HERZEN_PERSONA_ENABLED`, `HERZEN_PERSONA_PROMPT`)
@@ -113,9 +113,14 @@ Wakeword mode dependency:
 
 LLM response dependency:
 
-- local Ollama runtime (`ollama serve`) for `@herzen/dialog`
-- model selection via `HERZEN_OLLAMA_MODEL` (required)
-- optional endpoint override via `HERZEN_OLLAMA_BASE_URL` (loopback-only by default)
+- local Ollama runtime (`ollama serve`) or `llama-server` (llama.cpp) for `@herzen/dialog`
+- runtime selection via `HERZEN_RESPONSE_PROVIDER` (`ollama` default; optional `llama-server`)
+- model selection via:
+  - `HERZEN_OLLAMA_MODEL` (required for `ollama`)
+  - `HERZEN_LLAMA_SERVER_MODEL` (optional for `llama-server`, default `llama-server`)
+- optional endpoint override via:
+  - `HERZEN_OLLAMA_BASE_URL` (loopback-only by default)
+  - `HERZEN_LLAMA_SERVER_BASE_URL` (loopback-only by default)
 - optional kernel/persona controls:
   - `HERZEN_KERNEL_PROMPT` (or legacy `HERZEN_CONTEXT_KERNEL_PROMPT`)
   - `HERZEN_PERSONA_ENABLED=1`

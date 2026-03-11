@@ -20,9 +20,10 @@ This document describes the current local LLM dialog implementation.
 Implemented now:
 
 - typed response domain model (`ResponseInput`, `ResponseOutput`, `ResponseError`)
-- provider selection surface (`HERZEN_RESPONSE_PROVIDER`, currently `ollama`)
+- provider selection surface (`HERZEN_RESPONSE_PROVIDER`: `ollama` or `llama-server`)
 - Ollama config validation with local-only endpoint guardrails
 - non-streaming Ollama chat generation path (`POST /api/chat`, `stream: false`)
+- non-streaming llama-server chat generation path (`POST /v1/chat/completions`, `stream: false`)
 - context message injection (`conversationContext`) before current user transcript
 - layered system prompts (`kernel` + optional `persona`) before context/user messages
 - timeout/connection error mapping and strict output validation
@@ -37,9 +38,12 @@ Not implemented yet:
 
 ## Environment Surface
 
-- `HERZEN_RESPONSE_PROVIDER` (`ollama` default)
+- `HERZEN_RESPONSE_PROVIDER` (`ollama` default; supported: `ollama`, `llama-server`)
 - `HERZEN_OLLAMA_BASE_URL` (`http://127.0.0.1:11434` default)
 - `HERZEN_OLLAMA_MODEL` (required)
+- `HERZEN_LLAMA_SERVER_BASE_URL` (`http://127.0.0.1:8080` default)
+- `HERZEN_LLAMA_SERVER_MODEL` (optional, default `llama-server`)
+- `HERZEN_RESPONSE_MODEL` (optional generic fallback for `llama-server` model name)
 - `HERZEN_RESPONSE_TIMEOUT_MS` (default `12000`)
 - `HERZEN_RESPONSE_TEMPERATURE` (default `0.2`)
 - `HERZEN_ALLOW_REMOTE_LLM` (optional, default disabled)
@@ -49,6 +53,7 @@ Not implemented yet:
 Local-only policy:
 
 - non-loopback `HERZEN_OLLAMA_BASE_URL` is rejected unless `HERZEN_ALLOW_REMOTE_LLM=1`
+- non-loopback `HERZEN_LLAMA_SERVER_BASE_URL` is rejected unless `HERZEN_ALLOW_REMOTE_LLM=1`
 
 ---
 
@@ -72,12 +77,33 @@ HERZEN_OLLAMA_MODEL=qwen2.5:3b HERZEN_RESPONSE_TIMEOUT_MS=60000 pnpm dev
 
 ---
 
+## llama-server Setup
+
+Run llama.cpp server in one terminal:
+
+```bash
+llama-server -m /absolute/path/to/model.gguf --port 8080
+```
+
+Run Herzen with llama-server provider:
+
+```bash
+HERZEN_RESPONSE_PROVIDER=llama-server \
+HERZEN_LLAMA_SERVER_BASE_URL=http://127.0.0.1:8080 \
+HERZEN_LLAMA_SERVER_MODEL=local-gguf \
+pnpm dev
+```
+
+---
+
 ## Public API
 
 - `createResponseService(options?)`
 - `resolveResponseProvider(...)`
 - `resolveOllamaConfig(...)`
+- `resolveLlamaServerConfig(...)`
 - `createOllamaResponseService(...)`
+- `createLlamaServerResponseService(...)`
 - `buildMvpSystemPrompt(...)`
 - `resolveResponseLanguage(...)`
 - `ResponseError` + `ResponseErrorCode`

@@ -5,6 +5,12 @@ export HERZEN_STT_LANGUAGE="auto"
 export HERZEN_RECORD_SECONDS="3"
 export HERZEN_PLAYBACK="0"
 
+# LLM provider (optional)
+# export HERZEN_RESPONSE_PROVIDER="ollama" # or "llama-server"
+# export HERZEN_OLLAMA_MODEL="qwen2.5:3b"
+# export HERZEN_LLAMA_SERVER_BASE_URL="http://127.0.0.1:8080"
+# export HERZEN_LLAMA_SERVER_MODEL="local-gguf"
+
 # Wakeword sidecar mode (optional)
 # export HERZEN_TRIGGER_MODE="wakeword"
 # export HERZEN_WAKEWORD_SOCKET="$(cd "$HERZEN_ROOT/.." && pwd)/herzen-wake/run/wakeword.sock"

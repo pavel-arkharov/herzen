@@ -432,13 +432,13 @@ describe("createSttTriggerHandler", () => {
 		expect(onAssistantUtterance).toHaveBeenCalledWith(
 			expect.objectContaining({
 				turn: 1,
-				text: "[en] I can't reach the local model right now. Please check if Ollama is running.",
+				text: "[en] I can't reach the local model runtime right now. Please check if it is running.",
 				ingressSource: "voice",
 				language: "en",
 			}),
 		);
 		expect(speak).toHaveBeenCalledWith(
-			"[en] I can't reach the local model right now. Please check if Ollama is running.",
+			"[en] I can't reach the local model runtime right now. Please check if it is running.",
 		);
 		expect(appendSttLog).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -475,7 +475,7 @@ describe("createSttTriggerHandler", () => {
 		await handleTrigger();
 
 		expect(speak).toHaveBeenCalledWith(
-			"[ru] Не могу подключиться к локальной модели. Проверьте, что Ollama запущен.",
+			"[ru] Не могу подключиться к локальному рантайму модели. Проверьте, что он запущен.",
 		);
 	});
 

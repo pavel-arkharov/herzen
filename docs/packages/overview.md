@@ -343,18 +343,22 @@ Current status:
 
 - typed provider contract and error model are implemented
 - Ollama provider is implemented (`POST /api/chat`, non-streaming)
+- llama-server provider is implemented (`POST /v1/chat/completions`, non-streaming)
 - optional short-term conversation context is injected before the current user transcript
 - core STT-success path consumes `@herzen/dialog` and speaks model reply text
 
 Current provider:
 
 - `ollama` (local HTTP runtime)
+- `llama-server` (local llama.cpp HTTP runtime)
 
 Current environment surface:
 
-- `HERZEN_RESPONSE_PROVIDER` (default `ollama`)
+- `HERZEN_RESPONSE_PROVIDER` (default `ollama`; optional `llama-server`)
 - `HERZEN_OLLAMA_BASE_URL` (default `http://127.0.0.1:11434`)
-- `HERZEN_OLLAMA_MODEL` (required)
+- `HERZEN_OLLAMA_MODEL` (required for `ollama`)
+- `HERZEN_LLAMA_SERVER_BASE_URL` (default `http://127.0.0.1:8080`)
+- `HERZEN_LLAMA_SERVER_MODEL` (optional for `llama-server`)
 - `HERZEN_RESPONSE_TIMEOUT_MS` (default `12000`)
 - `HERZEN_RESPONSE_TEMPERATURE` (default `0.2`)
 - `HERZEN_ALLOW_REMOTE_LLM` (optional override, default local-only)
