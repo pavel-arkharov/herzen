@@ -18,7 +18,7 @@ export HERZEN_PLAYBACK="0"
 # LLM kernel/persona prompt layering (optional)
 # export HERZEN_KERNEL_PROMPT="You are Herzen, a local assistant. Be concise, safe, and practical."
 # export HERZEN_PERSONA_ENABLED="1"
-# export HERZEN_PERSONA_PROMPT="Address me as sir. Be polite and self-critical. Do not end with a question unless clarification is required."
+# export HERZEN_PERSONA_PROMPT="Be polite and self-critical. Do not end with a question unless clarification is required."
 
 # Home Assistant integration (optional, recommended: file-based secrets)
 # export HERZEN_HA_ENABLED="1"
