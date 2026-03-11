@@ -94,6 +94,10 @@ For a non-technical, step-by-step local setup guide, use:
   - `HERZEN_TTS_XTTS_VOICE_PROFILE` (default `default`)
   - `HERZEN_TTS_FALLBACK_PROVIDER` (default `say`)
   - `HERZEN_ALLOW_REMOTE_TTS` (default disabled; loopback-only endpoint guard)
+- optional expressive controls across providers:
+  - `HERZEN_TTS_STYLE` (`neutral|calm|empathetic|excited|shy|scared|playful`, default `neutral`)
+  - `HERZEN_TTS_SENTENCE_PAUSE_MS` (default `180`)
+  - `HERZEN_TTS_SAY_RATE_WPM` (optional base words-per-minute for `say`)
 - whisper.cpp CLI (`whisper-cli` on PATH or `HERZEN_WHISPER_BIN`) for STT transcription
 - local whisper model file path via `HERZEN_WHISPER_MODEL` for STT transcription
 - Silero VAD model file for adaptive recording:

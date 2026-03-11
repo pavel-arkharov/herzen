@@ -90,14 +90,11 @@ export function createContextAssembler(budget: ContextBudget): ContextAssembler 
 				);
 			};
 
+			// Kernel is sent as system prompt by the dialog layer; keep it budgeted, not duplicated in history.
 			appendBoundedSlice(
 				"kernel",
 				input.kernelPrompt,
 				budget.kernelChars,
-				{
-					role: "assistant",
-					text: input.kernelPrompt,
-				},
 			);
 
 			if (input.summary) {

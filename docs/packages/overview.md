@@ -209,6 +209,7 @@ This package is responsible for:
 - converting text to speech via local provider adapters
 - supporting multiple languages (English, Russian)
 - detecting language from text or parsing explicit **leading** language tags
+- applying lightweight local prosody hints (style, clause pacing, question rise, emphasis words)
 
 Current implemented providers:
 
@@ -220,6 +221,9 @@ Provider/fallback environment surface:
 
 - `HERZEN_TTS_PROVIDER` (`say`, `piper`, `xtts`)
 - `HERZEN_TTS_FALLBACK_PROVIDER` (default `say`)
+- `HERZEN_TTS_STYLE` (`neutral`, `calm`, `empathetic`, `excited`, `shy`, `scared`, `playful`; default `neutral`)
+- `HERZEN_TTS_SENTENCE_PAUSE_MS` (default `180`)
+- `HERZEN_TTS_SAY_RATE_WPM` (optional base words-per-minute for `say`)
 - `HERZEN_TTS_PIPER_MODEL_EN` (absolute path to EN `.onnx`)
 - `HERZEN_TTS_PIPER_MODEL_RU` (absolute path to RU `.onnx`)
 - `HERZEN_TTS_PIPER_CONFIG_EN` (optional path to EN `.onnx.json`)

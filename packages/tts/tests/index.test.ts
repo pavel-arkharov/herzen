@@ -71,6 +71,9 @@ import { listVoices, speak } from "../src/index.js";
 const TTS_ENV_KEYS = [
 	"HERZEN_TTS_PROVIDER",
 	"HERZEN_TTS_FALLBACK_PROVIDER",
+	"HERZEN_TTS_STYLE",
+	"HERZEN_TTS_SENTENCE_PAUSE_MS",
+	"HERZEN_TTS_SAY_RATE_WPM",
 	"HERZEN_TTS_XTTS_ENDPOINT",
 	"HERZEN_TTS_XTTS_TIMEOUT_MS",
 	"HERZEN_TTS_XTTS_VOICE_PROFILE",
@@ -209,11 +212,35 @@ describe("tts command wrappers", () => {
 			text: string;
 			language: string;
 			voiceProfile: string;
+			style: string;
+			prosody: {
+				rateScale: number;
+				pitchScale: number;
+				energyScale: number;
+				sentencePauseMs: number;
+				questionRise: boolean;
+				emphasisWords: string[];
+			};
+			clauses: Array<{
+				text: string;
+				pauseMs: number;
+				terminal: string;
+			}>;
 		};
-		expect(body).toEqual({
+		expect(body).toMatchObject({
 			text: "hello xtts",
 			language: "en",
 			voiceProfile: "default",
+			style: "neutral",
+			prosody: {
+				rateScale: 1,
+				pitchScale: 1,
+				energyScale: 1,
+				sentencePauseMs: 180,
+				questionRise: false,
+				emphasisWords: [],
+			},
+			clauses: [{ text: "hello xtts", pauseMs: 0, terminal: "statement" }],
 		});
 
 		expect(writeFileMock).toHaveBeenCalledWith("/tmp/herzen-xtts-test/speech.wav", expect.any(Buffer));
@@ -226,6 +253,101 @@ describe("tts command wrappers", () => {
 		);
 		expect(unlinkMock).toHaveBeenCalledWith("/tmp/herzen-xtts-test/speech.wav");
 		expect(rmMock).toHaveBeenCalledWith("/tmp/herzen-xtts-test", { recursive: true, force: true });
+	});
+
+	it("allows per-call voice profile and style override for xtts", async () => {
+		process.env.HERZEN_TTS_PROVIDER = "xtts";
+		process.env.HERZEN_TTS_XTTS_VOICE_PROFILE = "default";
+		const fetchMock = vi.fn(async () => {
+			return new Response(Buffer.from("wav-bytes"), {
+				status: 200,
+				headers: {
+					"Content-Type": "audio/wav",
+				},
+			});
+		});
+		vi.stubGlobal("fetch", fetchMock);
+		setupSpawn(0);
+
+		await expect(
+			speak("Can you help me?", {
+				style: "empathetic",
+				voiceProfile: "parkharo",
+				sentencePauseMs: 240,
+			}),
+		).resolves.toBeUndefined();
+
+		const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		const body = JSON.parse(String(init.body)) as {
+			voiceProfile: string;
+			style: string;
+			prosody: {
+				questionRise: boolean;
+				sentencePauseMs: number;
+				pitchScale: number;
+			};
+			clauses: Array<{
+				terminal: string;
+			}>;
+		};
+
+		expect(body.voiceProfile).toBe("parkharo");
+		expect(body.style).toBe("empathetic");
+		expect(body.prosody.questionRise).toBe(true);
+		expect(body.prosody.sentencePauseMs).toBe(240);
+		expect(body.prosody.pitchScale).toBeGreaterThan(1.04);
+		expect(body.clauses[0]?.terminal).toBe("question");
+	});
+
+	it("retries xtts synthesis with legacy payload after rich payload 400 response", async () => {
+		process.env.HERZEN_TTS_PROVIDER = "xtts";
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ error: { message: "unknown field style" } }), {
+					status: 400,
+					headers: {
+						"Content-Type": "application/json",
+					},
+				}),
+			)
+			.mockResolvedValueOnce(
+				new Response(Buffer.from("wav-bytes"), {
+					status: 200,
+					headers: {
+						"Content-Type": "audio/wav",
+					},
+				}),
+			);
+		vi.stubGlobal("fetch", fetchMock);
+		setupSpawn(0);
+
+		await expect(speak("hello fallback xtts")).resolves.toBeUndefined();
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+
+		const [, firstInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+		const firstBody = JSON.parse(String(firstInit.body)) as {
+			style: string;
+			prosody: unknown;
+			clauses: unknown;
+		};
+		expect(firstBody.style).toBe("neutral");
+		expect(firstBody.prosody).toBeDefined();
+		expect(firstBody.clauses).toBeDefined();
+
+		const [, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+		const secondBody = JSON.parse(String(secondInit.body)) as {
+			text: string;
+			language: string;
+			voiceProfile: string;
+			style?: string;
+		};
+		expect(secondBody).toEqual({
+			text: "hello fallback xtts",
+			language: "en",
+			voiceProfile: "default",
+		});
+		expect(secondBody.style).toBeUndefined();
 	});
 
 	it("uses piper provider and writes utterance text to stdin", async () => {
@@ -273,6 +395,58 @@ describe("tts command wrappers", () => {
 		expect(rmMock).toHaveBeenCalledWith("/tmp/herzen-xtts-test", { recursive: true, force: true });
 	});
 
+	it("uses expressive say rate shaping when style is overridden", async () => {
+		setupSpawn(0);
+
+		await expect(speak("let's go", { style: "excited" })).resolves.toBeUndefined();
+		expect(spawnMock).toHaveBeenCalledWith("say", ["-r", "198", "let's go"], { stdio: "inherit" });
+	});
+
+	it("applies shy style preset from env to say rate shaping", async () => {
+		process.env.HERZEN_TTS_STYLE = "shy";
+		setupSpawn(0);
+
+		await expect(speak("hello")).resolves.toBeUndefined();
+		expect(spawnMock).toHaveBeenCalledWith("say", ["-r", "170", "hello"], { stdio: "inherit" });
+	});
+
+	it("includes playful style prosody fields in xtts payload", async () => {
+		process.env.HERZEN_TTS_PROVIDER = "xtts";
+		const fetchMock = vi.fn(async () => {
+			return new Response(Buffer.from("wav-bytes"), {
+				status: 200,
+				headers: {
+					"Content-Type": "audio/wav",
+				},
+			});
+		});
+		vi.stubGlobal("fetch", fetchMock);
+		setupSpawn(0);
+
+		await expect(speak("hello there", { style: "playful" })).resolves.toBeUndefined();
+
+		const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		const body = JSON.parse(String(init.body)) as {
+			style: string;
+			prosody: {
+				pitchScale: number;
+				energyScale: number;
+			};
+		};
+
+		expect(body.style).toBe("playful");
+		expect(body.prosody.pitchScale).toBeGreaterThan(1.1);
+		expect(body.prosody.energyScale).toBeGreaterThan(1.07);
+	});
+
+	it("uses explicit say base rate env override", async () => {
+		process.env.HERZEN_TTS_SAY_RATE_WPM = "210";
+		setupSpawn(0);
+
+		await expect(speak("hello")).resolves.toBeUndefined();
+		expect(spawnMock).toHaveBeenCalledWith("say", ["-r", "210", "hello"], { stdio: "inherit" });
+	});
+
 	it("uses ru piper model when text is tagged as russian", async () => {
 		process.env.HERZEN_TTS_PROVIDER = "piper";
 		process.env.HERZEN_TTS_PIPER_MODEL_RU = "/models/ru.onnx";
@@ -312,6 +486,17 @@ describe("tts command wrappers", () => {
 			name: "TtsError",
 			code: "CONFIG_INVALID",
 			provider: "piper",
+			stage: "config",
+		});
+		expect(spawnMock).not.toHaveBeenCalled();
+	});
+
+	it("rejects invalid style configuration values", async () => {
+		process.env.HERZEN_TTS_STYLE = "dramatic";
+
+		await expect(speak("hello")).rejects.toMatchObject({
+			name: "TtsError",
+			code: "CONFIG_INVALID",
 			stage: "config",
 		});
 		expect(spawnMock).not.toHaveBeenCalled();

@@ -41,7 +41,6 @@ describe("context assembler", () => {
 		]);
 		expect(assembled.conversationContext.map((item) => item.role)).toEqual([
 			"assistant",
-			"assistant",
 			"user",
 			"assistant",
 			"user",

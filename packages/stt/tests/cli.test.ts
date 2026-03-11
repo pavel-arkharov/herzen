@@ -66,6 +66,15 @@ describe("stt cli", () => {
 		});
 	});
 
+	it("ignores standalone -- separator", () => {
+		const parsed = parseCliArgs(["--", "/tmp/audio.wav", "--lang", "ru", "--format", "txt"]);
+		expect(parsed).toMatchObject({
+			inputPath: "/tmp/audio.wav",
+			language: "ru",
+			format: "txt",
+		});
+	});
+
 	it("passes INIT_CWD-derived workingDir to transcribe helper", async () => {
 		const stdout = { log: vi.fn() };
 		const stderr = { error: vi.fn() };

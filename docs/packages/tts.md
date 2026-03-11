@@ -67,6 +67,7 @@ Characteristics:
 - Default path has zero setup (`say`)
 - Optional sidecar path stays local and loopback-only by default
 - Supports multiple languages (English/Russian) out of the box
+- Includes a lightweight prosody planner (style, clause pauses, question rise, emphasis hints)
 - Provider failure can fall back to configured local fallback provider (`say` by default)
 
 Language selection is handled by:
@@ -84,6 +85,9 @@ Current environment surface:
 
 - `HERZEN_TTS_PROVIDER` (`say`, `piper`, `xtts`)
 - `HERZEN_TTS_FALLBACK_PROVIDER` (default `say`)
+- `HERZEN_TTS_STYLE` (`neutral`, `calm`, `empathetic`, `excited`, `shy`, `scared`, `playful`; default `neutral`)
+- `HERZEN_TTS_SENTENCE_PAUSE_MS` (default `180`)
+- `HERZEN_TTS_SAY_RATE_WPM` (optional base words-per-minute for `say`)
 - `HERZEN_TTS_PIPER_MODEL_EN` (absolute path to EN `.onnx`)
 - `HERZEN_TTS_PIPER_MODEL_RU` (absolute path to RU `.onnx`)
 - `HERZEN_TTS_PIPER_CONFIG_EN` (optional path to EN `.onnx.json`)
@@ -117,6 +121,7 @@ packages/tts
 Responsibilities:
 
 - Selecting the appropriate language/voice
+- Building a small prosody plan (style, pacing, intonation hints)
 - Invoking the local TTS engine
 - Exposing a minimal API to the core
 - Providing a helper to list available system voices (`say -v ?`)

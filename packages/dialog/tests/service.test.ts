@@ -161,11 +161,15 @@ describe("createResponseService", () => {
 
 		expect(body.messages).toEqual([
 			{ role: "system", content: "You are an honest local assistant." },
-			{ role: "system", content: "Address the user as sir and be polite." },
+			{
+				role: "system",
+				content: expect.stringContaining("Persona acting mode is enabled."),
+			},
 			{ role: "system", content: "Respond in English." },
 			{ role: "user", content: "I had a gym workout." },
 			{ role: "user", content: "Summarize my day." },
 		]);
+		expect(body.messages[1]?.content).toContain("Persona card: Address the user as sir and be polite.");
 	});
 
 	it("maps timeout/abort failures to RUNTIME_UNAVAILABLE", async () => {
@@ -275,7 +279,7 @@ describe("buildSystemPromptLayers", () => {
 			timestampIso: "2026-03-01T12:00:00.000Z",
 		});
 		expect(prompts).toHaveLength(1);
-		expect(prompts[0]).toContain("You are Herzen, a calm local voice assistant.");
+		expect(prompts[0]).toContain("You are Herzen, a local voice assistant.");
 	});
 });
 

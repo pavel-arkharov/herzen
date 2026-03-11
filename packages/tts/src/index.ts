@@ -5,9 +5,14 @@ import { join } from "node:path";
 
 const DEFAULT_TTS_PROVIDER: TtsProvider = "say";
 const DEFAULT_TTS_FALLBACK_PROVIDER: TtsProvider = "say";
+const DEFAULT_TTS_STYLE: TtsStyle = "neutral";
 const DEFAULT_XTTS_ENDPOINT = "http://127.0.0.1:8020";
 const DEFAULT_XTTS_TIMEOUT_MS = 12_000;
 const DEFAULT_XTTS_VOICE_PROFILE = "default";
+const DEFAULT_SENTENCE_PAUSE_MS = 180;
+const DEFAULT_SAY_RATE_WPM = 185;
+const MIN_SAY_RATE_WPM = 120;
+const MAX_SAY_RATE_WPM = 320;
 const PLAY_HEADROOM_GAIN = "0.92";
 const PLAY_LEAD_IN_SECONDS = "0.04";
 
@@ -24,6 +29,9 @@ const CONNECTION_ERROR_CODES = new Set([
 
 export type TtsLanguage = "en" | "ru";
 export type TtsProvider = "say" | "piper" | "xtts";
+const TTS_STYLE_VALUES = ["neutral", "calm", "empathetic", "excited", "shy", "scared", "playful"] as const;
+const TTS_STYLE_SET = new Set<string>(TTS_STYLE_VALUES);
+export type TtsStyle = (typeof TTS_STYLE_VALUES)[number];
 export type TtsErrorCode =
 	| "CONFIG_INVALID"
 	| "RUNTIME_UNAVAILABLE"
@@ -32,6 +40,22 @@ export type TtsErrorCode =
 	| "PLAYBACK_FAILED";
 
 export type TtsErrorStage = "config" | "request" | "response" | "decode" | "synthesize" | "playback";
+
+interface StylePreset {
+	rateScale: number;
+	pitchScale: number;
+	energyScale: number;
+}
+
+const STYLE_PRESETS: Record<TtsStyle, StylePreset> = {
+	neutral: { rateScale: 1.0, pitchScale: 1.0, energyScale: 1.0 },
+	calm: { rateScale: 0.95, pitchScale: 0.97, energyScale: 0.92 },
+	empathetic: { rateScale: 0.94, pitchScale: 1.04, energyScale: 0.9 },
+	excited: { rateScale: 1.07, pitchScale: 1.08, energyScale: 1.15 },
+	shy: { rateScale: 0.92, pitchScale: 1.09, energyScale: 0.85 },
+	scared: { rateScale: 1.03, pitchScale: 1.14, energyScale: 1.06 },
+	playful: { rateScale: 1.04, pitchScale: 1.11, energyScale: 1.08 },
+};
 
 interface TtsErrorOptions {
 	provider?: TtsProvider;
@@ -58,6 +82,10 @@ export class TtsError extends Error {
 interface SpeakRequest {
 	text: string;
 	language: TtsLanguage;
+	style: TtsStyle;
+	voiceProfile?: string;
+	prosody: TtsProsodyPlan;
+	clauses: TtsClausePlan[];
 }
 
 interface XttsConfig {
@@ -77,6 +105,36 @@ interface XttsJsonResponse {
 	format?: string;
 }
 
+interface XttsProsodyPayload {
+	rateScale: number;
+	pitchScale: number;
+	energyScale: number;
+	sentencePauseMs: number;
+	questionRise: boolean;
+	emphasisWords: string[];
+}
+
+interface XttsClausePayload {
+	text: string;
+	pauseMs: number;
+	terminal: TtsClauseTerminal;
+}
+
+interface XttsSynthesizePayload {
+	text: string;
+	language: TtsLanguage;
+	voiceProfile: string;
+	style: TtsStyle;
+	prosody: XttsProsodyPayload;
+	clauses: XttsClausePayload[];
+}
+
+interface XttsLegacySynthesizePayload {
+	text: string;
+	language: TtsLanguage;
+	voiceProfile: string;
+}
+
 interface PiperConfig {
 	modelEn?: string;
 	modelRu?: string;
@@ -85,6 +143,33 @@ interface PiperConfig {
 	lengthScale?: number;
 	noiseScale?: number;
 	noiseW?: number;
+}
+
+interface TtsProsodyPlan {
+	rateScale: number;
+	pitchScale: number;
+	energyScale: number;
+	sentencePauseMs: number;
+	questionRise: boolean;
+	emphasisWords: string[];
+}
+
+type TtsClauseTerminal = "statement" | "question" | "exclamation";
+
+interface TtsClausePlan {
+	text: string;
+	pauseMs: number;
+	terminal: TtsClauseTerminal;
+}
+
+export interface SpeakOptions {
+	language?: TtsLanguage;
+	style?: TtsStyle;
+	voiceProfile?: string;
+	sentencePauseMs?: number;
+	rateScale?: number;
+	pitchScale?: number;
+	energyScale?: number;
 }
 
 function run(cmd: string, args: string[]): Promise<void> {
@@ -116,6 +201,22 @@ function parseTaggedLanguage(text: string): {
 function pickVoice(lang: TtsLanguage): string | undefined {
 	if (lang === "ru") return undefined;
 	return undefined;
+}
+
+function isTtsStyle(value: string): value is TtsStyle {
+	return TTS_STYLE_SET.has(value);
+}
+
+function resolveTtsStyle(rawStyle: string | undefined): TtsStyle {
+	const normalized = rawStyle?.trim().toLowerCase();
+	if (!normalized) return DEFAULT_TTS_STYLE;
+	if (isTtsStyle(normalized)) return normalized;
+
+	throw new TtsError(
+		"CONFIG_INVALID",
+		`Unsupported HERZEN_TTS_STYLE "${rawStyle}". Supported values: ${TTS_STYLE_VALUES.join(", ")}.`,
+		{ stage: "config" },
+	);
 }
 
 function resolveTtsProvider(rawProvider = process.env.HERZEN_TTS_PROVIDER): TtsProvider {
@@ -189,6 +290,119 @@ function resolveOptionalNumber(
 function resolveOptionalPath(rawValue: string | undefined): string | undefined {
 	const trimmed = rawValue?.trim();
 	return trimmed ? trimmed : undefined;
+}
+
+function resolveSentencePauseMs(rawValue: string | undefined): number {
+	const trimmed = rawValue?.trim();
+	if (!trimmed) return DEFAULT_SENTENCE_PAUSE_MS;
+	const parsed = Number.parseInt(trimmed, 10);
+	if (!Number.isInteger(parsed) || parsed < 0 || parsed > 5_000) {
+		throw new TtsError(
+			"CONFIG_INVALID",
+			`HERZEN_TTS_SENTENCE_PAUSE_MS must be an integer between 0 and 5000 (received "${rawValue}").`,
+			{ stage: "config" },
+		);
+	}
+	return parsed;
+}
+
+function normalizeSpeechInput(text: string): string {
+	return normalizeWhitespace(text);
+}
+
+function detectClauseTerminal(text: string): TtsClauseTerminal {
+	if (/\?\s*$/.test(text)) return "question";
+	if (/!\s*$/.test(text)) return "exclamation";
+	return "statement";
+}
+
+function splitSpeechClauses(text: string, sentencePauseMs: number): TtsClausePlan[] {
+	const trimmed = text.trim();
+	if (!trimmed) return [];
+	const rawClauses = trimmed.split(/(?<=[.!?])\s+/).map((clause) => clause.trim()).filter(Boolean);
+	const clauses = rawClauses.length > 0 ? rawClauses : [trimmed];
+	return clauses.map((clause, index) => ({
+		text: clause,
+		pauseMs: index < clauses.length - 1 ? sentencePauseMs : 0,
+		terminal: detectClauseTerminal(clause),
+	}));
+}
+
+function extractEmphasisWords(text: string): string[] {
+	const emphasis = new Set<string>();
+
+	for (const match of text.matchAll(/\*([^*\n]{1,40})\*/g)) {
+		const candidate = normalizeWhitespace(match[1] ?? "");
+		if (candidate) emphasis.add(candidate);
+		if (emphasis.size >= 8) return [...emphasis];
+	}
+
+	for (const match of text.matchAll(/\b[А-ЯA-Z]{3,}\b/g)) {
+		const candidate = match[0]?.trim();
+		if (!candidate) continue;
+		emphasis.add(candidate);
+		if (emphasis.size >= 8) return [...emphasis];
+	}
+
+	return [...emphasis];
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+	return Math.min(max, Math.max(min, value));
+}
+
+function roundTo(value: number, digits: number): number {
+	const factor = 10 ** digits;
+	return Math.round(value * factor) / factor;
+}
+
+function resolveProsodyPlan(
+	text: string,
+	style: TtsStyle,
+	clauses: TtsClausePlan[],
+	sentencePauseMs: number,
+	options: SpeakOptions,
+): TtsProsodyPlan {
+	const preset = STYLE_PRESETS[style];
+	const hasQuestion = clauses.some((clause) => clause.terminal === "question");
+	const hasExcitedClause = clauses.some((clause) => clause.terminal === "exclamation");
+
+	const defaultRateScale = preset.rateScale + (hasExcitedClause ? 0.03 : 0);
+	const defaultPitchScale = preset.pitchScale + (hasQuestion ? 0.04 : 0) + (hasExcitedClause ? 0.02 : 0);
+	const defaultEnergyScale = preset.energyScale + (hasExcitedClause ? 0.08 : 0);
+
+	return {
+		rateScale: clampNumber(options.rateScale ?? defaultRateScale, 0.7, 1.5),
+		pitchScale: clampNumber(options.pitchScale ?? defaultPitchScale, 0.7, 1.6),
+		energyScale: clampNumber(options.energyScale ?? defaultEnergyScale, 0.6, 1.8),
+		sentencePauseMs,
+		questionRise: hasQuestion,
+		emphasisWords: extractEmphasisWords(text),
+	};
+}
+
+function normalizeOptionalString(value: string | undefined): string | undefined {
+	const trimmed = value?.trim();
+	return trimmed ? trimmed : undefined;
+}
+
+function buildSpeakRequest(text: string, options: SpeakOptions, env: NodeJS.ProcessEnv): SpeakRequest {
+	const { lang, clean } = parseTaggedLanguage(text);
+	const normalizedText = normalizeSpeechInput(clean);
+	const language: TtsLanguage = options.language ?? lang ?? (hasCyrillic(normalizedText) ? "ru" : "en");
+	const style = options.style ?? resolveTtsStyle(env.HERZEN_TTS_STYLE);
+	const sentencePauseMs = options.sentencePauseMs ?? resolveSentencePauseMs(env.HERZEN_TTS_SENTENCE_PAUSE_MS);
+	const clauses = splitSpeechClauses(normalizedText, sentencePauseMs);
+	const prosody = resolveProsodyPlan(normalizedText, style, clauses, sentencePauseMs, options);
+
+	return {
+		text: normalizedText,
+		language,
+		style,
+		voiceProfile: normalizeOptionalString(options.voiceProfile),
+		prosody,
+		clauses,
+	};
 }
 
 function normalizeBaseUrl(rawBaseUrl: string): string {
@@ -303,10 +517,32 @@ function resolveXttsConfig(env: NodeJS.ProcessEnv = process.env): XttsConfig {
 	};
 }
 
-async function speakWithSay(request: SpeakRequest): Promise<void> {
+function resolveSayRateWpm(rawRateWpm: string | undefined, rateScale: number): number | undefined {
+	const trimmed = rawRateWpm?.trim();
+	if (!trimmed && Math.abs(rateScale - 1) < 0.01) return undefined;
+
+	let baseRate = DEFAULT_SAY_RATE_WPM;
+	if (trimmed) {
+		const parsed = Number.parseInt(trimmed, 10);
+		if (!Number.isInteger(parsed) || parsed <= 0) {
+			throw new TtsError(
+				"CONFIG_INVALID",
+				`HERZEN_TTS_SAY_RATE_WPM must be a positive integer (received "${rawRateWpm}").`,
+				{ provider: "say", stage: "config" },
+			);
+		}
+		baseRate = parsed;
+	}
+
+	return clampNumber(Math.round(baseRate * rateScale), MIN_SAY_RATE_WPM, MAX_SAY_RATE_WPM);
+}
+
+async function speakWithSay(request: SpeakRequest, env: NodeJS.ProcessEnv): Promise<void> {
 	const voice = pickVoice(request.language);
 	const args: string[] = [];
 	if (voice) args.push("-v", voice);
+	const rate = resolveSayRateWpm(env.HERZEN_TTS_SAY_RATE_WPM, request.prosody.rateScale);
+	if (typeof rate === "number") args.push("-r", String(rate));
 	args.push(request.text);
 
 	await run("say", args);
@@ -319,7 +555,7 @@ async function speakWithProvider(
 ): Promise<void> {
 	switch (provider) {
 		case "say":
-			await speakWithSay(request);
+			await speakWithSay(request, env);
 			return;
 		case "xtts":
 			await speakWithXtts(request, env);
@@ -339,7 +575,7 @@ async function speakWithPiper(request: SpeakRequest, env: NodeJS.ProcessEnv): Pr
 	const tempFile = join(tempDir, "speech.wav");
 
 	try {
-		await synthesizeWithPiper(request.text, tempFile, modelPath, configPath, config);
+		await synthesizeWithPiper(request, tempFile, modelPath, configPath, config);
 		await ensurePiperOutputFile(tempFile);
 		await playWavFile(tempFile, "piper");
 	} catch (err) {
@@ -355,14 +591,14 @@ async function speakWithPiper(request: SpeakRequest, env: NodeJS.ProcessEnv): Pr
 }
 
 async function synthesizeWithPiper(
-	text: string,
+	request: SpeakRequest,
 	outputFile: string,
 	modelPath: string,
 	configPath: string | undefined,
 	config: PiperConfig,
 ): Promise<void> {
-	const args = buildPiperArgs(outputFile, modelPath, configPath, config);
-	await runPiperCommand(args, text);
+	const args = buildPiperArgs(outputFile, modelPath, configPath, config, request.prosody.rateScale);
+	await runPiperCommand(args, request.text);
 }
 
 function buildPiperArgs(
@@ -370,13 +606,16 @@ function buildPiperArgs(
 	modelPath: string,
 	configPath: string | undefined,
 	config: PiperConfig,
+	rateScale: number,
 ): string[] {
 	const args = ["--model", modelPath, "--output_file", outputFile];
 	if (configPath) {
 		args.push("--config", configPath);
 	}
-	if (typeof config.lengthScale === "number") {
-		args.push("--length_scale", String(config.lengthScale));
+
+	const effectiveLengthScale = resolveEffectivePiperLengthScale(config.lengthScale, rateScale);
+	if (typeof effectiveLengthScale === "number") {
+		args.push("--length_scale", String(roundTo(effectiveLengthScale, 3)));
 	}
 	if (typeof config.noiseScale === "number") {
 		args.push("--noise_scale", String(config.noiseScale));
@@ -386,6 +625,15 @@ function buildPiperArgs(
 	}
 
 	return args;
+}
+
+function resolveEffectivePiperLengthScale(baseLengthScale: number | undefined, rateScale: number): number | undefined {
+	const safeRateScale = clampNumber(rateScale, 0.5, 2.0);
+	const effective = clampNumber((baseLengthScale ?? 1) / safeRateScale, 0.25, 4.0);
+	if (typeof baseLengthScale === "number" || Math.abs(rateScale - 1) > 0.01) {
+		return effective;
+	}
+	return undefined;
 }
 
 async function runPiperCommand(args: string[], text: string): Promise<void> {
@@ -504,35 +752,24 @@ async function speakWithXtts(request: SpeakRequest, env: NodeJS.ProcessEnv): Pro
 }
 
 async function synthesizeWithXtts(request: SpeakRequest, config: XttsConfig): Promise<Buffer> {
-	const controller = new AbortController();
-	let timedOut = false;
-	const timer = setTimeout(() => {
-		timedOut = true;
-		controller.abort();
-	}, config.timeoutMs);
+	const payload = buildXttsSynthesizePayload(request, config);
+	let response = await requestXttsSynthesize(payload, config);
 
-	let response: Response;
-	try {
-		response = await fetch(`${config.endpoint}/synthesize`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				text: request.text,
-				language: request.language,
-				voiceProfile: config.voiceProfile,
-			}),
-			signal: controller.signal,
-		});
-	} catch (err) {
-		throw mapXttsRequestError(err, {
-			endpoint: config.endpoint,
-			timeoutMs: config.timeoutMs,
-			timedOut,
-		});
-	} finally {
-		clearTimeout(timer);
+	if (response.status === 400) {
+		const firstErrorMessage = await readErrorMessage(response);
+		const legacyPayload = buildXttsLegacySynthesizePayload(request, config);
+		response = await requestXttsSynthesize(legacyPayload, config);
+		if (!response.ok) {
+			const retryMessage = await readErrorMessage(response);
+			throw new TtsError(
+				"SYNTH_FAILED",
+				`XTTS sidecar returned HTTP ${response.status}${retryMessage ? `: ${retryMessage}` : ""}${
+					firstErrorMessage ? ` (legacy fallback attempted after initial 400: ${firstErrorMessage})` : ""
+				}.`,
+				{ provider: "xtts", stage: "response" },
+			);
+		}
+		return decodeXttsAudioResponse(response);
 	}
 
 	if (!response.ok) {
@@ -545,6 +782,70 @@ async function synthesizeWithXtts(request: SpeakRequest, config: XttsConfig): Pr
 	}
 
 	return decodeXttsAudioResponse(response);
+}
+
+function buildXttsSynthesizePayload(request: SpeakRequest, config: XttsConfig): XttsSynthesizePayload {
+	return {
+		text: request.text,
+		language: request.language,
+		voiceProfile: request.voiceProfile ?? config.voiceProfile,
+		style: request.style,
+		prosody: {
+			rateScale: roundTo(request.prosody.rateScale, 3),
+			pitchScale: roundTo(request.prosody.pitchScale, 3),
+			energyScale: roundTo(request.prosody.energyScale, 3),
+			sentencePauseMs: request.prosody.sentencePauseMs,
+			questionRise: request.prosody.questionRise,
+			emphasisWords: request.prosody.emphasisWords,
+		},
+		clauses: request.clauses.map((clause) => ({
+			text: clause.text,
+			pauseMs: clause.pauseMs,
+			terminal: clause.terminal,
+		})),
+	};
+}
+
+function buildXttsLegacySynthesizePayload(
+	request: SpeakRequest,
+	config: XttsConfig,
+): XttsLegacySynthesizePayload {
+	return {
+		text: request.text,
+		language: request.language,
+		voiceProfile: request.voiceProfile ?? config.voiceProfile,
+	};
+}
+
+async function requestXttsSynthesize(
+	payload: XttsSynthesizePayload | XttsLegacySynthesizePayload,
+	config: XttsConfig,
+): Promise<Response> {
+	const controller = new AbortController();
+	let timedOut = false;
+	const timer = setTimeout(() => {
+		timedOut = true;
+		controller.abort();
+	}, config.timeoutMs);
+
+	try {
+		return await fetch(`${config.endpoint}/synthesize`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify(payload),
+			signal: controller.signal,
+		});
+	} catch (err) {
+		throw mapXttsRequestError(err, {
+			endpoint: config.endpoint,
+			timeoutMs: config.timeoutMs,
+			timedOut,
+		});
+	} finally {
+		clearTimeout(timer);
+	}
 }
 
 async function decodeXttsAudioResponse(response: Response): Promise<Buffer> {
@@ -657,13 +958,7 @@ function mapXttsRequestError(err: unknown, context: XttsErrorContext): TtsError 
 }
 
 async function readErrorMessage(response: Response): Promise<string> {
-	let text = "";
-	try {
-		text = await response.text();
-	} catch {
-		return "";
-	}
-
+	const text = await response.text().catch(() => "");
 	const normalizedText = normalizeWhitespace(text);
 	if (!normalizedText) return "";
 
@@ -815,21 +1110,16 @@ function assertNever(value: never): never {
 	});
 }
 
-export async function speak(text: string): Promise<void> {
-	const { lang, clean } = parseTaggedLanguage(text);
-	const language: TtsLanguage = lang ?? (hasCyrillic(clean) ? "ru" : "en");
+export async function speak(text: string, options: SpeakOptions = {}): Promise<void> {
 	const provider = resolveTtsProvider(process.env.HERZEN_TTS_PROVIDER);
 	const fallbackProvider = resolveFallbackProvider(process.env.HERZEN_TTS_FALLBACK_PROVIDER);
-	const request: SpeakRequest = {
-		text: clean,
-		language,
-	};
+	const request = buildSpeakRequest(text, options, process.env);
 
 	try {
 		await speakWithProvider(provider, request, process.env);
 	} catch (err) {
 		if (provider === "say" || fallbackProvider === provider) throw err;
-		logFallbackWarning(provider, fallbackProvider, language, err);
+		logFallbackWarning(provider, fallbackProvider, request.language, err);
 		await speakWithProvider(fallbackProvider, request, process.env);
 	}
 }

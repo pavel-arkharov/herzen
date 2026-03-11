@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { resolveHomeAssistantConfig } from "@herzen/integration-homeassistant";
 import { createDeterministicIntentRouter } from "../src/intent/router.js";
@@ -8,7 +9,7 @@ import {
 	replayDeterministicSession,
 } from "../src/replay/harness.js";
 
-const fixtureDir = join(process.cwd(), "tests", "fixtures", "replay");
+const fixtureDir = fileURLToPath(new URL("./fixtures/replay", import.meta.url));
 
 describe("replay harness", () => {
 	it("replays deterministic routes and computes metrics", () => {

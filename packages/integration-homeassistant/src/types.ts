@@ -71,7 +71,7 @@ export interface HomeAssistantCommandInput {
 	languageHint?: string;
 }
 
-export interface HomeAssistantCommandExecutionResult extends HomeAssistantHandledAction {}
+export type HomeAssistantCommandExecutionResult = HomeAssistantHandledAction;
 
 export interface HomeAssistantService {
 	readonly enabled: boolean;
