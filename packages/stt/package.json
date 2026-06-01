@@ -5,14 +5,18 @@
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"bin": {
-		"herzen-stt": "dist/cli.js"
+		"herzen-stt": "dist/cli.js",
+		"herzen-stt-listen": "dist/listen_cli.js",
+		"herzen-stt-prompt": "dist/herzen_cli.js"
 	},
 	"exports": {
 		".": "./dist/index.js"
 	},
 	"scripts": {
 		"build": "tsc -p tsconfig.json",
+		"herzen": "node --enable-source-maps dist/herzen_cli.js",
 		"transcribe:file": "node --enable-source-maps dist/cli.js",
+		"transcribe:mic": "node --enable-source-maps dist/listen_cli.js",
 		"lint": "eslint . --format json",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"test": "vitest run tests",

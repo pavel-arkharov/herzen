@@ -1,63 +1,40 @@
-# Documentation Index
+# Documentation
 
-General documents live at the docs root. Topic-specific docs are grouped in subfolders.
+This directory contains durable project documentation for Herzen. Local task
+prompts, audits, scratch notes, generated data, and model files are intentionally
+kept out of git.
 
-## General
+## Start Here
 
-- runbook.md
-- docs/design_principles.md
+- [Design principles](design_principles.md)
+- [Architecture overview](architecture/overview.md)
+- [Package overview](packages/overview.md)
+- [Testing approach](tests/testing_approach.md)
+- [Beginner runbook](../runbook.md)
 
 ## Architecture
 
-- docs/architecture/overview.md
-- docs/architecture/wakeword_sidecar_contract.md
-- docs/architecture/v1_control_plane_intent_context.md
+- [Overview](architecture/overview.md)
+- [Wakeword sidecar contract](architecture/wakeword_sidecar_contract.md)
+- [Control plane, intent, and context stack](architecture/v1_control_plane_intent_context.md)
+- [Persona, kernel prompt, and context stack](architecture/persona_kernel_context_stack.md)
 
-Related external repo:
+Related external repository:
 
-- herzen-wake daemon: https://github.com/pavel-arkharov/herzen-wake
-
-## Internal
-
-- docs/internal/adaptive_vad_failure_guide.md
+- [`herzen-wake`](https://github.com/pavel-arkharov/herzen-wake), the wakeword daemon used by wakeword mode
 
 ## Packages
 
-- docs/packages/overview.md
-- docs/packages/core.md
-- docs/packages/tui.md
-- docs/packages/dialog.md
-- docs/packages/integration-homeassistant.md
-- docs/packages/stt.md
-- docs/packages/tts.md
-- docs/packages/vad.md
+- [Package overview](packages/overview.md)
+- [Core](packages/core.md)
+- [Dialog](packages/dialog.md)
+- [Home Assistant integration](packages/integration-homeassistant.md)
+- [Speech-to-text](packages/stt.md)
+- [Text-to-speech](packages/tts.md)
+- [TUI](packages/tui.md)
+- [Voice activity detection](packages/vad.md)
 
-## Hardware
+## Supporting Docs
 
-- docs/hardware/strategy.md
-
-## Tests
-
-- docs/tests/testing_approach.md
-
-## Process
-
-- docs/process/task_execution_strategy.md
-
-## Audits (gitignored)
-
-- docs/audit/
-
-Audit notes are local working artifacts and are intentionally not tracked.
-
-## Skills (gitignored)
-
-- docs/skills/
-
-Skill prompts are local working artifacts and are intentionally not tracked.
-
-## Tasks (gitignored)
-
-- docs/tasks/
-
-Task prompts and execution notes are local working artifacts and are intentionally not tracked.
+- [Hardware strategy](hardware/strategy.md)
+- [Task execution strategy](process/task_execution_strategy.md)

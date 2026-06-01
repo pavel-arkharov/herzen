@@ -1,6 +1,6 @@
 # General Task Execution Strategy
 
-Use this as the shared playbook for local task prompts in `/Users/parkharo/Programming/herzen/docs/tasks/`.
+Use this as the shared playbook for local task prompts in `docs/tasks/`.
 
 ## Why this exists
 
@@ -42,7 +42,7 @@ When a task is complete:
 
 1. Confirm acceptance criteria and verification outputs.
 2. Move durable decisions into tracked docs (README/package docs/architecture/process), if relevant.
-3. Remove the completed task `.md` file from `/Users/parkharo/Programming/herzen/docs/tasks/` when the user confirms completion.
+3. Remove the completed task `.md` file from `docs/tasks/` when the user confirms completion.
 
 This keeps the task folder focused on active work only.
 
@@ -57,5 +57,5 @@ Use predictable task names:
 
 ## Practical note
 
-`/Users/parkharo/Programming/herzen/docs/tasks/` is gitignored on purpose.
+`docs/tasks/` is gitignored on purpose.
 These files are local execution aids, not permanent project documentation.

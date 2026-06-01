@@ -1,36 +1,40 @@
-# Herzen – Architecture Overview
+# Herzen Architecture Overview
 
-Herzen is structured as a **local-first, modular assistant system**.
+Herzen is a local-first, modular assistant system. The architecture is built
+around orchestration boundaries rather than a single monolithic assistant loop.
 
-The goal is to keep each concern isolated:
-audio, cognition, wake word detection, speech processing, and integrations
-should evolve independently without forcing rewrites.
+The goal is to let audio, triggers, speech processing, LLM dialog, observability,
+and integrations evolve independently. Heavy model execution is kept behind
+adapters or sidecars so the TypeScript core can stay focused on state,
+coordination, policy, and runtime control.
 
-This document describes the _current_ architecture and intended direction.
+This document describes the current architecture and the boundaries that should
+stay stable as the prototype grows.
 
 ---
 
 ## High-level architecture
 
-At runtime, Herzen consists of a small number of long-running local processes.
-
-Conceptually:
+At runtime, Herzen consists of a small number of local processes and plain-file
+control streams:
 
 ```
 [ Microphone ]
-↓
-[ Wake Word ]
-↓
+      |
+[ Trigger Source ]
+      |
 [ Assistant Core ]
-↓
-[ STT → Logic → TTS ]
-↓
-[ Speakers / Files / Integrations ]
+      |
+[ STT -> Intent Routing -> LLM -> TTS ]
+      |
+[ Speakers / Files / Home Assistant ]
 
-[ Operator TUI ] -> [ control/ingress.jsonl ] -> [ Assistant Core ]
+[ Operator TUI ] -> [ data/control/ingress.jsonl ] -> [ Assistant Core ]
 ```
 
-Only a subset of this pipeline is implemented so far.
+The current implementation supports manual triggers, wakeword sidecar triggers,
+voice turns, text ingress from the TUI, deterministic Home Assistant commands,
+conversation journals, replay fixtures, and runtime performance logs.
 
 ---
 
@@ -101,19 +105,20 @@ Audio output path resolution is stable across launch directories:
 
 ---
 
-## Monorepo philosophy
+## Monorepo Philosophy
 
-The repository is a **pnpm monorepo**.
+The repository is a `pnpm` monorepo.
 
 - Each package represents one responsibility
 - Packages communicate via function calls, CLI calls, or local IPC
-- Heavy assets (models, audio, logs) are _never_ committed to git
+- Heavy assets such as models, audio, and logs are never committed to git
 
 ---
 
-## Active Rule: Journal Extraction Guardrail
+## Journal Extraction Guardrail
 
-For Phase 2 and HA MVP, conversation observability remains implemented in `@herzen/core`.
+Conversation observability currently lives in `@herzen/core`, but it is kept in
+a narrow extraction boundary.
 
 Core source ownership is now organized by bounded domains:
 

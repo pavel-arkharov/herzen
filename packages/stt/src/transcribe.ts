@@ -60,8 +60,9 @@ interface WhisperJson {
 
 const BACKEND = "whisper.cpp";
 const FALLBACK_BINARIES = ["whisper-cli"] as const;
-const WHISPER_DIRECT_INPUT_EXTENSIONS = new Set([".wav", ".mp3", ".ogg", ".flac"]);
-const AUTO_CONVERT_EXTENSIONS = new Set([".m4a"]);
+const WHISPER_DIRECT_INPUT_EXTENSIONS = new Set([".wav"]);
+const AUTO_CONVERT_EXTENSIONS = new Set([".m4a", ".mp3", ".ogg", ".flac"]);
+const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 
 export async function transcribeWav(filePath: string, options: SttOptions = {}): Promise<SttResult> {
 	const start = Date.now();
@@ -69,38 +70,40 @@ export async function transcribeWav(filePath: string, options: SttOptions = {}):
 	const modelPath = await resolveModelPath();
 	const languageMode = resolveLanguageMode(options.language);
 	const threads = resolveThreads(process.env.HERZEN_STT_THREADS);
+	const noGpu = resolveNoGpuMode(process.env.HERZEN_WHISPER_NO_GPU, options.extraArgs);
 	const tempDir = await mkdtemp(join(tmpdir(), "herzen-stt-"));
 	const outputPrefix = join(tempDir, "transcript");
 	const whisperInputPath = await prepareWhisperInput(filePath, tempDir);
 
-	const args: string[] = [
-		"-m",
-		modelPath,
-		"-f",
-		whisperInputPath,
-		"-l",
-		languageMode,
-		"-oj",
-		"-of",
-		outputPrefix,
-	];
-	if (threads !== undefined) args.push("-t", String(threads));
-	if (options.extraArgs?.length) args.push(...options.extraArgs);
-
 	try {
-		const output = await runCommand(binary, args);
-		const parsed = await parseTranscript({
-			outputPrefix,
-			stdout: output.stdout,
-			stderr: output.stderr,
-			fallbackLanguage: languageMode,
-		});
-		return {
-			text: parsed.text,
-			language: parsed.language,
-			backend: BACKEND,
-			durationMs: Date.now() - start,
-		};
+		try {
+			return await runWhisperTranscription({
+				binary,
+				modelPath,
+				whisperInputPath,
+				outputPrefix,
+				languageMode,
+				threads,
+				extraArgs: options.extraArgs,
+				noGpu,
+				start,
+			});
+		} catch (err) {
+			if (!(err instanceof SttError)) throw err;
+			if (noGpu || !shouldRetryWithoutGpu(err)) throw err;
+
+			return await runWhisperTranscription({
+				binary,
+				modelPath,
+				whisperInputPath,
+				outputPrefix,
+				languageMode,
+				threads,
+				extraArgs: options.extraArgs,
+				noGpu: true,
+				start,
+			});
+		}
 	} catch (err) {
 		if (err instanceof SttError) throw err;
 		const details = err instanceof Error ? err.message : String(err);
@@ -108,6 +111,82 @@ export async function transcribeWav(filePath: string, options: SttOptions = {}):
 	} finally {
 		await rm(tempDir, { recursive: true, force: true });
 	}
+}
+
+async function runWhisperTranscription(params: {
+	binary: string;
+	modelPath: string;
+	whisperInputPath: string;
+	outputPrefix: string;
+	languageMode: SttLanguage;
+	threads: number | undefined;
+	extraArgs: string[] | undefined;
+	noGpu: boolean;
+	start: number;
+}): Promise<SttResult> {
+	const args = buildWhisperArgs(params);
+	const output = await runCommand(params.binary, args);
+	const parsed = await parseTranscript({
+		outputPrefix: params.outputPrefix,
+		stdout: output.stdout,
+		stderr: output.stderr,
+		fallbackLanguage: params.languageMode,
+	});
+	return {
+		text: parsed.text,
+		language: parsed.language,
+		backend: BACKEND,
+		durationMs: Date.now() - params.start,
+	};
+}
+
+function buildWhisperArgs(params: {
+	modelPath: string;
+	whisperInputPath: string;
+	outputPrefix: string;
+	languageMode: SttLanguage;
+	threads: number | undefined;
+	extraArgs: string[] | undefined;
+	noGpu: boolean;
+}): string[] {
+	const args: string[] = [
+		"-m",
+		params.modelPath,
+		"-f",
+		params.whisperInputPath,
+		"-l",
+		params.languageMode,
+		"-oj",
+		"-of",
+		params.outputPrefix,
+	];
+	if (params.threads !== undefined) args.push("-t", String(params.threads));
+	if (params.noGpu) args.push("-ng");
+	if (params.extraArgs?.length) args.push(...params.extraArgs);
+	return args;
+}
+
+function resolveNoGpuMode(rawNoGpu: string | undefined, extraArgs: string[] | undefined): boolean {
+	const normalized = rawNoGpu?.trim().toLowerCase();
+	if (normalized && TRUE_VALUES.has(normalized)) return true;
+	return Boolean(extraArgs?.some((arg) => arg === "-ng" || arg === "--no-gpu"));
+}
+
+function shouldRetryWithoutGpu(err: SttError): boolean {
+	if (err.code !== "TRANSCRIBE_FAILED") return false;
+	const detail = `${err.message}\n${stringifyCause(err.cause)}`.toLowerCase();
+	return (
+		detail.includes("ggml_metal_buffer_init") ||
+		detail.includes("failed to allocate buffer") ||
+		detail.includes("metal")
+	);
+}
+
+function stringifyCause(cause: unknown): string {
+	if (typeof cause === "string") return cause;
+	if (cause instanceof Error) return `${cause.message}\n${stringifyCause(cause.cause)}`;
+	if (cause === undefined || cause === null) return "";
+	return String(cause);
 }
 
 function resolveLanguageMode(explicitLanguage: SttLanguage | undefined): SttLanguage {
@@ -231,11 +310,15 @@ async function prepareWhisperInput(inputPath: string, tempDir: string): Promise<
 	}
 
 	const convertedPath = join(tempDir, "input.wav");
-	await convertM4aToWav(inputPath, convertedPath);
+	await convertAudioToWav(inputPath, convertedPath, extension);
 	return convertedPath;
 }
 
-async function convertM4aToWav(inputPath: string, outputPath: string): Promise<void> {
+async function convertAudioToWav(
+	inputPath: string,
+	outputPath: string,
+	extension: string,
+): Promise<void> {
 	const errors: string[] = [];
 
 	try {
@@ -265,7 +348,7 @@ async function convertM4aToWav(inputPath: string, outputPath: string): Promise<v
 
 	throw new SttError(
 		"TRANSCRIBE_FAILED",
-		`Failed to transcode .m4a input. Install ffmpeg (brew install ffmpeg) or convert to wav manually. Tried ffmpeg and afconvert. ${errors.join(" | ")}`,
+		`Failed to transcode ${extension} input. Install ffmpeg (brew install ffmpeg) or convert to wav manually. Tried ffmpeg and afconvert. ${errors.join(" | ")}`,
 	);
 }
 

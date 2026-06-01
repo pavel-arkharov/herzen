@@ -256,6 +256,30 @@ describe("transcribeWav", () => {
 		expect(mocks.rm).toHaveBeenCalledWith("/tmp/herzen-stt-test", { recursive: true, force: true });
 	});
 
+	it("retries on CPU when whisper fails during GPU bootstrap", async () => {
+		process.env.HERZEN_WHISPER_BIN = "whisper-cli";
+		process.env.HERZEN_WHISPER_MODEL = "/models/ggml-base.bin";
+
+		withSpawnPlan([
+			closeWith(0, { stdout: "whisper help" }),
+			closeWith(2, {
+				stderr: "ggml_metal_buffer_init: error: failed to allocate buffer, size = 2.94 MiB",
+			}),
+			closeWith(0, { stdout: "ok" }),
+		]);
+
+		const result = await transcribeWav("/tmp/input.wav");
+
+		expect(result.text).toBe("hello world");
+		expect(mocks.spawn).toHaveBeenCalledTimes(3);
+		expect(mocks.spawn).toHaveBeenNthCalledWith(
+			3,
+			"whisper-cli",
+			expect.arrayContaining(["-ng"]),
+			{ stdio: ["ignore", "pipe", "pipe"] },
+		);
+	});
+
 	it("wraps unexpected spawn error as TRANSCRIBE_FAILED", async () => {
 		process.env.HERZEN_WHISPER_BIN = "whisper-cli";
 		process.env.HERZEN_WHISPER_MODEL = "/models/ggml-base.bin";
@@ -292,6 +316,44 @@ describe("transcribeWav", () => {
 				"-y",
 				"-i",
 				"/tmp/input.m4a",
+				"-ar",
+				"16000",
+				"-ac",
+				"1",
+				"-c:a",
+				"pcm_s16le",
+				"/tmp/herzen-stt-test/input.wav",
+			],
+			{ stdio: ["ignore", "pipe", "pipe"] },
+		);
+		expect(mocks.spawn).toHaveBeenNthCalledWith(
+			3,
+			"whisper-cli",
+			expect.arrayContaining(["-f", "/tmp/herzen-stt-test/input.wav"]),
+			{ stdio: ["ignore", "pipe", "pipe"] },
+		);
+	});
+
+	it("transcodes .ogg input to wav before whisper transcription", async () => {
+		process.env.HERZEN_WHISPER_BIN = "whisper-cli";
+		process.env.HERZEN_WHISPER_MODEL = "/models/ggml-base.bin";
+
+		withSpawnPlan([
+			closeWith(0, { stdout: "whisper help" }),
+			closeWith(0),
+			closeWith(0, { stdout: "ok" }),
+		]);
+
+		await transcribeWav("/tmp/input.ogg");
+
+		expect(mocks.spawn).toHaveBeenCalledTimes(3);
+		expect(mocks.spawn).toHaveBeenNthCalledWith(
+			2,
+			"ffmpeg",
+			[
+				"-y",
+				"-i",
+				"/tmp/input.ogg",
 				"-ar",
 				"16000",
 				"-ac",

@@ -6,13 +6,13 @@ This document defines how testing works in this repository today, and how to run
 
 Current test scope is unit tests for the monorepo packages:
 
-- `/Users/parkharo/Programming/herzen/packages/core`
-- `/Users/parkharo/Programming/herzen/packages/audio`
-- `/Users/parkharo/Programming/herzen/packages/stt`
-- `/Users/parkharo/Programming/herzen/packages/tts`
-- `/Users/parkharo/Programming/herzen/packages/vad`
-- `/Users/parkharo/Programming/herzen/packages/wakeword`
-- `/Users/parkharo/Programming/herzen/packages/dialog`
+- `packages/core`
+- `packages/audio`
+- `packages/stt`
+- `packages/tts`
+- `packages/vad`
+- `packages/wakeword`
+- `packages/dialog`
 
 Primary goals:
 
@@ -27,19 +27,19 @@ Primary goals:
 
 - Test runner: `vitest`
 - Coverage provider: `@vitest/coverage-istanbul`
-- Config file: `/Users/parkharo/Programming/herzen/vitest.config.mts`
+- Config file: `vitest.config.mts`
 
 ## Test layout
 
 Tests live in `tests/` folders inside each package:
 
-- `/Users/parkharo/Programming/herzen/packages/core/tests`
-- `/Users/parkharo/Programming/herzen/packages/audio/tests`
-- `/Users/parkharo/Programming/herzen/packages/stt/tests`
-- `/Users/parkharo/Programming/herzen/packages/tts/tests`
-- `/Users/parkharo/Programming/herzen/packages/vad/tests`
-- `/Users/parkharo/Programming/herzen/packages/wakeword/tests`
-- `/Users/parkharo/Programming/herzen/packages/dialog/tests`
+- `packages/core/tests`
+- `packages/audio/tests`
+- `packages/stt/tests`
+- `packages/tts/tests`
+- `packages/vad/tests`
+- `packages/wakeword/tests`
+- `packages/dialog/tests`
 
 Naming convention:
 
@@ -47,13 +47,11 @@ Naming convention:
 
 ## Where to run commands
 
-Unless explicitly noted otherwise, run all commands from the repository root:
-
-- `/Users/parkharo/Programming/herzen`
+Unless explicitly noted otherwise, run all commands from the repository root.
 
 ## Commands
 
-From `/Users/parkharo/Programming/herzen`:
+From the repository root:
 
 ```bash
 # run all tests once
@@ -81,13 +79,13 @@ pnpm typecheck
 
 Optional package-local execution (from package directory):
 
-- `/Users/parkharo/Programming/herzen/packages/core`: `pnpm test`
-- `/Users/parkharo/Programming/herzen/packages/audio`: `pnpm test`
-- `/Users/parkharo/Programming/herzen/packages/stt`: `pnpm test`
-- `/Users/parkharo/Programming/herzen/packages/tts`: `pnpm test`
-- `/Users/parkharo/Programming/herzen/packages/vad`: `pnpm test`
-- `/Users/parkharo/Programming/herzen/packages/wakeword`: `pnpm test`
-- `/Users/parkharo/Programming/herzen/packages/dialog`: `pnpm test`
+- `packages/core`: `pnpm test`
+- `packages/audio`: `pnpm test`
+- `packages/stt`: `pnpm test`
+- `packages/tts`: `pnpm test`
+- `packages/vad`: `pnpm test`
+- `packages/wakeword`: `pnpm test`
+- `packages/dialog`: `pnpm test`
 
 ## Test design guidance
 

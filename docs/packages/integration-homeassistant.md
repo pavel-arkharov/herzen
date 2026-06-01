@@ -39,7 +39,7 @@ Current action support:
 
 ### 1) Enable HA integration
 
-In local env (usually `/Users/parkharo/Programming/herzen/.envrc`):
+In local env, usually `.envrc` at the repository root:
 
 ```bash
 export HERZEN_HA_ENABLED="1"
@@ -158,4 +158,3 @@ BASE_URL="$(tr -d '\r\n' < data/secrets/home_assistant/base_url)"
 TOKEN="$(tr -d '\r\n' < data/secrets/home_assistant/token)"
 curl -sS -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/states" | jq '.[] | select(.entity_id|test("^(light|scene)\\.")) | .entity_id'
 ```
-
